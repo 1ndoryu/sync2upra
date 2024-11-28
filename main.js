@@ -132,7 +132,7 @@ function createMainWindow() {
         resizable: true,
         hasShadow: true,
         roundedCorners: true,
-        webPreferences: {preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, devTools: true}
+        webPreferences: {preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, devTools: false}
     });
     mainWindow.loadURL('https://2upra.com');
     mainWindow.on('closed', () => (mainWindow = null));
