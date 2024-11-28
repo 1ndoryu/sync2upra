@@ -3,55 +3,55 @@
     "version": "1.0.0",
     "main": "main.js",
     "scripts": {
-      "start": "electron .",
-      "pack": "electron-builder --dir",
-      "dist": "electron-builder"
+        "start": "electron .",
+        "pack": "electron-builder --dir",
+        "dist": "electron-builder"
     },
     "keywords": [
-      "sync",
-      "2upra",
-      "nodejs"
+        "sync",
+        "2upra",
+        "nodejs"
     ],
     "author": "1ndoryu@2upra.com",
     "license": "MIT",
     "description": "Sync 2upra",
     "devDependencies": {
-      "electron": "^33.2.0",
-      "electron-builder": "^24.12.0",
-          "electron-updater": "^6.1.10"
+        "electron": "^33.2.0",
+        "electron-builder": "^24.12.0",
+        "electron-updater": "^6.3.9"
     },
     "dependencies": {
-      "axios": "^1.7.7",
-      "electron-store": "^10.0.0",
-      "node-fetch": "^3.3.2"
+        "axios": "^1.7.7",
+        "electron-store": "^10.0.0",
+        "node-fetch": "^3.3.2"
     },
-     "build": {
-      "appId": "com.2upra.sync",
-      "productName": "Sync 2upra",
-      "copyright": "Copyright © 2024 2upra",
-      "directories": {
-        "output": "release/"
-      },
-      "win": {
-        "target": "nsis",
-        "icon": "build/icon.ico"
-      },
-      "nsis": {
-        "oneClick": false,
-        "allowToChangeInstallationDirectory": true
-      },
-      "mac": {
-        "target": "dmg",
-        "icon": "build/icon.icns"
-      },
-      "linux": {
-        "target": "deb",
-         "icon": "build/icon.png"
-      },
-          "publish": {
-        "provider": "github",
-        "owner": "1ndoryu",
-        "repo": "sync2upra"
-      }
+    "build": {
+        "appId": "com.2upra.sync",
+        "productName": "Sync 2upra",
+        "copyright": "Copyright © 2024 2upra",
+        "directories": {
+            "output": "release/"
+        },
+        "win": {
+            "target": "nsis",
+            "icon": "build/icon.ico"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        },
+        "mac": {
+            "target": "dmg",
+            "icon": "build/icon.icns"
+        },
+        "linux": {
+            "target": "deb",
+            "icon": "build/icon.png"
+        },
+        "publish": {
+            "provider": "github",
+            "owner": "1ndoryu",
+            "repo": "sync2upra"
+        }
     }
-  }
+}
