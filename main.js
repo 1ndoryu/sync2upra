@@ -1,10 +1,11 @@
 const {app, BrowserWindow, ipcMain, session, Tray, Menu, dialog, shell, contextBridge} = require('electron');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-const path = require('path'); // Mueve esta línea aquí
+const path = require('path'); 
 const configFilePath = path.join(app.getPath('userData'), 'config.json');
 const {sync, getSyncHistory} = require('./services/sync.js');
 const fs = require('fs');
-const {autoUpdater} = require('electron-updater'); // Importa electron-updater
+const log = require('electron-log');
+const {autoUpdater} = require('electron-updater'); 
 
 let mainWindow, appWindow, tray;
 let isAppWindowVisible = false;
@@ -13,18 +14,15 @@ let userId = null;
 let Store;
 let store;
 
+
 (async () => {
     Store = (await import('electron-store')).default;
     store = new Store();
-
-    // Configuración de logs para electron-updater
     autoUpdater.logger = require('electron-log');
     autoUpdater.logger.transports.file.level = 'info';
-
-    // Deshabilita la descarga automática
     autoUpdater.autoDownload = false;
 
-    // Verifica actualizaciones al iniciar
+
     app.whenReady().then(async () => {
         session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
             details.requestHeaders['X-Electron-App'] = 'true';
@@ -195,8 +193,16 @@ autoUpdater.on('update-downloaded', info => {
             }
         });
 });
-//FUNCIONES
 
+
+
+
+
+
+
+
+
+//FUNCIONES
 async function verifyToken(token) {
     console.log('--- Iniciando la verificación del token ---');
     console.log('Token recibido para verificar:', token);
