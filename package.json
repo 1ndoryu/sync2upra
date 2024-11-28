@@ -5,7 +5,7 @@
     "scripts": {
         "start": "electron .",
         "pack": "electron-builder --dir",
-        "dist": "electron-builder --publish always" 
+        "dist": "electron-builder --publish always"
     },
     "keywords": [
         "sync",
@@ -53,7 +53,7 @@
             "provider": "github",
             "owner": "1ndoryu",
             "repo": "sync2upra",
-            "publish": "onTag" 
+            "publish": "always"
         }
     }
 }
