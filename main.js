@@ -1,10 +1,10 @@
-//En main.js
 const {app, BrowserWindow, ipcMain, session, Tray, Menu, dialog, shell, contextBridge} = require('electron');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const path = require('path'); // Mueve esta línea aquí
 const configFilePath = path.join(app.getPath('userData'), 'config.json');
 const {sync, getSyncHistory} = require('./services/sync.js');
 const fs = require('fs');
+const {autoUpdater} = require('electron-updater'); // Importa electron-updater
 
 let mainWindow, appWindow, tray;
 let isAppWindowVisible = false;
@@ -13,18 +13,24 @@ let userId = null;
 let Store;
 let store;
 
-//porque si cambio "userId": en config, si ya habia una y cambio a otra, la app inicia con esa id, o sea la seguridad no esta funcionando, debe cerrarse automaticamente si el usuario cambio el userid en la config y evitar que continue
 (async () => {
     Store = (await import('electron-store')).default;
     store = new Store();
 
+    // Configuración de logs para electron-updater
+    autoUpdater.logger = require('electron-log');
+    autoUpdater.logger.transports.file.level = 'info';
+
+    // Deshabilita la descarga automática
+    autoUpdater.autoDownload = false;
+
+    // Verifica actualizaciones al iniciar
     app.whenReady().then(async () => {
         session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
             details.requestHeaders['X-Electron-App'] = 'true';
             callback({requestHeaders: details.requestHeaders});
         });
 
-        // Cargar userId al iniciar la aplicación
         userId = store.get('userId') || null;
 
         ipcMain.handle('get-user-id', async () => {
@@ -44,15 +50,15 @@ let store;
                 if (verifiedUserId && verifiedUserId === storedUserId) {
                     userId = verifiedUserId;
                     createAppWindow(token);
+                    // Verifica actualizaciones después de crear la ventana principal
+                    autoUpdater.checkForUpdates();
                 } else {
                     console.error('UserId almacenado no coincide con el userId verificado. Invalida el token.');
                     sync?.stopSyncing?.();
                     app.quit();
-
                 }
             } catch (error) {
                 console.error('Error al verificar el token al iniciar:', error);
-
             }
         } else {
             console.log('No hay token de autenticación presente.');
@@ -60,68 +66,6 @@ let store;
         }
     });
 })();
-
-ipcMain.on('auth-token', (event, token) => {
-    console.log('Token recibido desde main:', token);
-    verifyToken(token)
-        .then(({ userId: newUserId, newToken }) => {
-
-            userId = newUserId;
-            store.set('userId', userId);
-            if (newToken) {
-                store.set('authToken', newToken);
-            } else {
-                store.set('authToken', token); 
-            }
-            if (!appWindow) {
-                createAppWindow(newToken || token);
-            } else {
-                appWindow.reload();
-            }
-        })
-        .catch(error => {
-            console.error('Error al verificar el token recibido:', error);
-            handleInvalidToken();
-        });
-
-    setInterval(() => {
-        const currentToken = store.get('authToken');
-        if (currentToken) {
-            verifyToken(currentToken)
-                .then(({ userId: newUserId, newToken }) => {
-                    userId = newUserId;
-                    store.set('userId', userId);
-                    if (newToken) {
-                        store.set('authToken', newToken);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error en la verificación periódica del token:', error);
-                    handleInvalidToken();
-                });
-        }
-    }, 600000);
-});
-
-ipcMain.on('fetchData', async (event, args) => {
-    console.log('fetchData event received in renderer.js with args:', args);
-
-    try {
-        const authToken = store.get('authToken');
-
-        if (authToken) {
-            console.log('AuthToken encontrado en storage:', authToken);
-            ipcMain.send('auth-token-reply', authToken);
-            console.log('AuthToken enviado a main.js');
-        } else {
-            console.log('No hay authToken en storage');
-            handleInvalidToken();
-        }
-    } catch (error) {
-        console.error('Error en fetchData:', error);
-        handleInvalidToken();
-    }
-});;
 
 function createMainWindow() {
     console.log('Creando ventana principal...');
@@ -150,14 +94,15 @@ function createMainWindow() {
                     const newUserId = await verifyToken(token);
                     if (newUserId) {
                         console.log('Token válido. Creando ventana de la aplicación.');
-                        userId = newUserId; // Actualiza la variable global
+                        userId = newUserId;
                         store.set('userId', userId);
                         store.set('authToken', token);
                         createAppWindow(token);
+                        // Verifica actualizaciones después de crear la ventana de la aplicación
+                        autoUpdater.checkForUpdates();
                     }
                 } catch (error) {
                     console.error('Error al verificar el token:', error);
-                    // Puedes mostrar un mensaje de error o redirigir a la página de inicio
                 }
             } else {
                 console.warn('No se encontró un token en la redirección.');
@@ -167,6 +112,90 @@ function createMainWindow() {
     return mainWindow;
 }
 
+function createAppWindow() {
+    console.log('Creando ventana de la aplicación...');
+    appWindow = new BrowserWindow({
+        width: 350,
+        height: 500,
+        frame: false,
+        resizable: false,
+        hasShadow: true,
+        roundedCorners: true,
+        transparent: true,
+        show: false,
+        skipTaskbar: true,
+        alwaysOnTop: true,
+        webPreferences: {preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, devTools: false}
+    });
+
+    const userId = store.get('userId');
+    if (userId) {
+        console.log('UserId recuperado de storage:', userId);
+        appWindow.userId = userId;
+    } else {
+        console.error('UserId no encontrado en el storage. Cerrando la aplicación.');
+        store.delete('authToken');
+        appWindow?.close();
+        return;
+    }
+
+    appWindow.loadFile('./src/renderer/index.html');
+    appWindow.once('ready-to-show', () => mainWindow?.close());
+    appWindow.on('blur', () => isAppWindowVisible && hideAppWindow());
+    appWindow.on('close', event => (app.quitting ? (appWindow = null) : (event.preventDefault(), appWindow.hide(), (isAppWindowVisible = false))));
+
+    return appWindow;
+}
+
+// Eventos de electron-updater
+autoUpdater.on('checking-for-update', () => {
+    console.log('Buscando actualizaciones...');
+});
+
+autoUpdater.on('update-available', info => {
+    console.log('Actualización disponible:', info);
+    dialog
+        .showMessageBox({
+            type: 'info',
+            title: 'Actualización disponible',
+            message: `Hay una nueva versión de Sync 2upra disponible (${info.version}). ¿Quieres descargarla ahora?`,
+            buttons: ['Sí', 'No']
+        })
+        .then(response => {
+            if (response.response === 0) {
+                autoUpdater.downloadUpdate();
+            }
+        });
+});
+
+autoUpdater.on('update-not-available', info => {
+    console.log('No hay actualizaciones disponibles:', info);
+});
+
+autoUpdater.on('error', err => {
+    console.error('Error al actualizar:', err);
+});
+
+autoUpdater.on('download-progress', progress => {
+    console.log(`Descargando actualización - Progreso: ${progress.percent}%`);
+});
+
+autoUpdater.on('update-downloaded', info => {
+    console.log('Actualización descargada:', info);
+    dialog
+        .showMessageBox({
+            type: 'info',
+            title: 'Actualización lista',
+            message: `La versión ${info.version} ha sido descargada. Reinicia la aplicación para instalarla.`,
+            buttons: ['Reiniciar', 'Más tarde']
+        })
+        .then(response => {
+            if (response.response === 0) {
+                autoUpdater.quitAndInstall();
+            }
+        });
+});
+//FUNCIONES
 
 async function verifyToken(token) {
     console.log('--- Iniciando la verificación del token ---');
@@ -197,7 +226,7 @@ async function verifyToken(token) {
 
             if (data.status === 'valid') {
                 console.log('Token válido. UserId:', data.user_id);
-                resolve({ userId: data.user_id, newToken: data.new_token }); // Devuelve ambos
+                resolve({userId: data.user_id, newToken: data.new_token}); // Devuelve ambos
             } else {
                 console.log('Token inválido. Estado:', data.status, 'Mensaje:', data.message);
                 handleInvalidToken();
@@ -226,43 +255,6 @@ function handleInvalidToken() {
         createMainWindow();
     }
 }
-function createAppWindow() {
-    console.log('Creando ventana de la aplicación...');
-    appWindow = new BrowserWindow({
-        width: 350,
-        height: 500,
-        frame: false,
-        resizable: false,
-        hasShadow: true,
-        roundedCorners: true,
-        transparent: true,
-        show: false,
-        skipTaskbar: true,
-        alwaysOnTop: true,
-        webPreferences: { preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, devTools: true }
-    });
-
-    const userId = store.get('userId');
-    if (userId) {
-        console.log('UserId recuperado de storage:', userId);
-        appWindow.userId = userId;
-    } else {
-        console.error('UserId no encontrado en el storage. Cerrando la aplicación.');
-        store.delete('authToken');  // Borra el token si el userId no está disponible
-        appWindow?.close();
-        return;
-    }
-
-    appWindow.loadFile('./src/renderer/index.html');
-    
-    appWindow.webContents.once('dom-ready', () => appWindow.webContents.openDevTools({ mode: 'detach' }));
-    appWindow.once('ready-to-show', () => mainWindow?.close());
-    appWindow.on('blur', () => isAppWindowVisible && hideAppWindow());
-    appWindow.on('close', event => (app.quitting ? (appWindow = null) : (event.preventDefault(), appWindow.hide(), (isAppWindowVisible = false))));
-
-    return appWindow;
-}
-//FUNCIONES
 
 async function getDownloadDirectory() {
     let config = {};
@@ -465,4 +457,65 @@ ipcMain.on('reiniciar', async () => {
     }
     app.relaunch();
     app.exit(0);
+});
+
+ipcMain.on('auth-token', (event, token) => {
+    console.log('Token recibido desde main:', token);
+    verifyToken(token)
+        .then(({userId: newUserId, newToken}) => {
+            userId = newUserId;
+            store.set('userId', userId);
+            if (newToken) {
+                store.set('authToken', newToken);
+            } else {
+                store.set('authToken', token);
+            }
+            if (!appWindow) {
+                createAppWindow(newToken || token);
+            } else {
+                appWindow.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error al verificar el token recibido:', error);
+            handleInvalidToken();
+        });
+
+    setInterval(() => {
+        const currentToken = store.get('authToken');
+        if (currentToken) {
+            verifyToken(currentToken)
+                .then(({userId: newUserId, newToken}) => {
+                    userId = newUserId;
+                    store.set('userId', userId);
+                    if (newToken) {
+                        store.set('authToken', newToken);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error en la verificación periódica del token:', error);
+                    handleInvalidToken();
+                });
+        }
+    }, 600000);
+});
+
+ipcMain.on('fetchData', async (event, args) => {
+    console.log('fetchData event received in renderer.js with args:', args);
+
+    try {
+        const authToken = store.get('authToken');
+
+        if (authToken) {
+            console.log('AuthToken encontrado en storage:', authToken);
+            ipcMain.send('auth-token-reply', authToken);
+            console.log('AuthToken enviado a main.js');
+        } else {
+            console.log('No hay authToken en storage');
+            handleInvalidToken();
+        }
+    } catch (error) {
+        console.error('Error en fetchData:', error);
+        handleInvalidToken();
+    }
 });
