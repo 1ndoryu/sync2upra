@@ -5,7 +5,7 @@
     "scripts": {
         "start": "electron .",
         "pack": "electron-builder --dir",
-        "dist": "electron-builder"
+        "dist": "electron-builder --publish always" 
     },
     "keywords": [
         "sync",
@@ -53,6 +53,14 @@
             "provider": "github",
             "owner": "1ndoryu",
             "repo": "sync2upra"
-        }
+        },
+        "publish": [
+             {
+               "provider": "github",
+               "owner": "1ndoryu",
+               "repo": "sync2upra",
+               "publish": "always"
+              }
+         ]
     }
 }
