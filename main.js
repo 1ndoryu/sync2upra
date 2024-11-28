@@ -1,11 +1,11 @@
 const {app, BrowserWindow, ipcMain, session, Tray, Menu, dialog, shell, contextBridge} = require('electron');
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-const path = require('path'); 
+const path = require('path');
 const configFilePath = path.join(app.getPath('userData'), 'config.json');
 const {sync, getSyncHistory} = require('./services/sync.js');
 const fs = require('fs');
 const log = require('electron-log');
-const {autoUpdater} = require('electron-updater'); 
+const {autoUpdater} = require('electron-updater');
 
 let mainWindow, appWindow, tray;
 let isAppWindowVisible = false;
@@ -14,7 +14,6 @@ let userId = null;
 let Store;
 let store;
 
-
 (async () => {
     Store = (await import('electron-store')).default;
     store = new Store();
@@ -22,14 +21,13 @@ let store;
     autoUpdater.logger.transports.file.level = 'info';
     autoUpdater.autoDownload = false;
 
-
     app.whenReady().then(async () => {
         session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
             details.requestHeaders['X-Electron-App'] = 'true';
             callback({requestHeaders: details.requestHeaders});
         });
 
-        userId = store.get('userId') || null;
+        userId = store.get('userId')?.userId || null;
 
         ipcMain.handle('get-user-id', async () => {
             console.log('Obteniendo userId en get-user-id:', userId);
@@ -43,17 +41,19 @@ let store;
         if (token) {
             try {
                 const {userId: verifiedUserId} = await verifyToken(token);
-                const storedUserId = store.get('userId');
+                const storedUserId = store.get('userId')?.userId;
 
                 if (verifiedUserId && verifiedUserId === storedUserId) {
                     userId = verifiedUserId;
                     createAppWindow(token);
-                    // Verifica actualizaciones después de crear la ventana principal
                     autoUpdater.checkForUpdates();
                 } else {
                     console.error('UserId almacenado no coincide con el userId verificado. Invalida el token.');
+                    console.log('UserId almacenado:', storedUserId, typeof storedUserId);
+                    console.log('UserId verificado:', verifiedUserId, typeof verifiedUserId);
                     sync?.stopSyncing?.();
-                    app.quit();
+                    //app.quit();
+                    createMainWindow();
                 }
             } catch (error) {
                 console.error('Error al verificar el token al iniciar:', error);
@@ -64,6 +64,72 @@ let store;
         }
     });
 })();
+
+async function verifyToken(token) {
+    console.log('--- Iniciando la verificación del token ---');
+    console.log('Token recibido para verificar:', token);
+
+    return new Promise(async (resolve, reject) => {
+        try {
+            const response = await fetch('https://2upra.com/wp-json/2upra/v1/verify_token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({token: token})
+            });
+
+            console.log('--- Respuesta del servidor recibida ---');
+            console.log('Status de la respuesta:', response.status, response.statusText);
+
+            if (!response.ok) {
+                console.error('Error en la respuesta del servidor (no es OK):', response.status, response.statusText);
+                handleInvalidToken();
+                reject('Error en la respuesta del servidor');
+                return;
+            }
+
+            const data = await response.json();
+            console.log('Datos del servidor:', data);
+            /*
+            se queda colgado en esta parte y este es el ultimo log que muestra
+            Datos del servidor: { user_id: '355', status: 'valid' }
+            Token v├ílido. UserId: 355
+            */
+            if (data.status === 'valid') {
+                console.log('Token válido. UserId:', data.user_id);
+                userId = data.user_id;
+                store.set('userId', {userId});
+                store.set('authToken', token);
+                resolve({userId: data.user_id});
+            } else {
+                console.log('Token inválido. Estado:', data.status, 'Mensaje:', data.message);
+                handleInvalidToken();
+                reject('Token inválido');
+            }
+        } catch (error) {
+            console.error('Error al verificar el token (excepción):', error);
+            handleInvalidToken();
+            reject('Error al verificar el token');
+        }
+    });
+}
+
+function handleInvalidToken() {
+    console.log('Manejando token inválido...');
+    store.delete('authToken');
+    store.delete('userId');
+    userId = null;
+    if (appWindow) {
+        appWindow.close();
+        appWindow = null;
+    }
+    if (mainWindow) {
+        mainWindow.show();
+    } else {
+        createMainWindow();
+    }
+}
 
 function createMainWindow() {
     console.log('Creando ventana principal...');
@@ -89,14 +155,14 @@ function createMainWindow() {
             if (token) {
                 try {
                     console.log('Verificando el token...');
-                    const newUserId = await verifyToken(token);
+                    const response = await verifyToken(token);
+                    const newUserId = response.userId;
                     if (newUserId) {
                         console.log('Token válido. Creando ventana de la aplicación.');
                         userId = newUserId;
-                        store.set('userId', userId);
+                        store.set('userId', {userId});
                         store.set('authToken', token);
                         createAppWindow(token);
-                        // Verifica actualizaciones después de crear la ventana de la aplicación
                         autoUpdater.checkForUpdates();
                     }
                 } catch (error) {
@@ -194,73 +260,7 @@ autoUpdater.on('update-downloaded', info => {
         });
 });
 
-
-
-
-
-
-
-
-
 //FUNCIONES
-async function verifyToken(token) {
-    console.log('--- Iniciando la verificación del token ---');
-    console.log('Token recibido para verificar:', token);
-
-    return new Promise(async (resolve, reject) => {
-        try {
-            const response = await fetch('https://2upra.com/wp-json/2upra/v1/verify_token', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({token: token})
-            });
-
-            console.log('--- Respuesta del servidor recibida ---');
-            console.log('Status de la respuesta:', response.status, response.statusText);
-
-            if (!response.ok) {
-                console.error('Error en la respuesta del servidor (no es OK):', response.status, response.statusText);
-                handleInvalidToken();
-                reject('Error en la respuesta del servidor');
-                return;
-            }
-
-            const data = await response.json();
-            console.log('Datos del servidor:', data);
-
-            if (data.status === 'valid') {
-                console.log('Token válido. UserId:', data.user_id);
-                resolve({userId: data.user_id, newToken: data.new_token}); // Devuelve ambos
-            } else {
-                console.log('Token inválido. Estado:', data.status, 'Mensaje:', data.message);
-                handleInvalidToken();
-                reject('Token inválido');
-            }
-        } catch (error) {
-            console.error('Error al verificar el token (excepción):', error);
-            handleInvalidToken();
-            reject('Error al verificar el token');
-        }
-    });
-}
-
-function handleInvalidToken() {
-    console.log('Manejando token inválido...');
-    store.delete('authToken');
-    store.delete('userId');
-    userId = null;
-    if (appWindow) {
-        appWindow.close();
-        appWindow = null;
-    }
-    if (mainWindow) {
-        mainWindow.show();
-    } else {
-        createMainWindow();
-    }
-}
 
 async function getDownloadDirectory() {
     let config = {};
@@ -523,5 +523,15 @@ ipcMain.on('fetchData', async (event, args) => {
     } catch (error) {
         console.error('Error en fetchData:', error);
         handleInvalidToken();
+    }
+});
+
+ipcMain.handle('set-user-data', async (event, newUserId, newDownloadDir) => {
+    console.log('Nuevo userId recibido:', newUserId);
+    console.log('Nuevo downloadDir recibido:', newDownloadDir);
+    userId = newUserId;
+    downloadDir = newDownloadDir;
+    if (userId && downloadDir) {
+        startSyncing(userId, downloadDir);
     }
 });

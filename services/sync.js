@@ -9,11 +9,12 @@ const {appWindow} = require('../main.js');
 let Store;
 let store;
 
+
 (async () => {
     try {
         Store = (await import('electron-store')).default;
         store = new Store();
-        const userId = store.get('userId');
+        let userId = store.get('userId')?.userId || null;
         const downloadDir = store.get('downloadDir');
         if (userId && downloadDir) {
             startSyncing(userId, downloadDir);
@@ -93,7 +94,6 @@ const syncAudios = async (userId, downloadDir) => {
         ipcMain.emit('sync-error', error); // Emitir evento de error
     }
 };
-
 
 const handleFileDownload = async (audio, downloadDir, userId) => {
     const collectionDir = path.join(downloadDir, audio.collection);

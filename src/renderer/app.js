@@ -99,11 +99,11 @@ function loadAndDisplaySyncHistory() {
                 if (audioList.innerHTML === '') {
                     audioList.innerHTML = '';
                     const emptyMessage = document.createElement('p');
-                    emptyMessage.textContent = 'No hay elementos en el historial de sincronización.';
+                    emptyMessage.textContent = 'Aún no hay elementos en el historial de sincronización :)';
                     audioList.appendChild(emptyMessage);
                     return;
                 }
-            } else if (history && history.length > 0 && audioList.firstChild && audioList.firstChild.tagName === 'P' && audioList.firstChild.textContent === 'No hay elementos en el historial de sincronización.') {
+            } else if (history && history.length > 0 && audioList.firstChild && audioList.firstChild.tagName === 'P' && audioList.firstChild.textContent === 'Aún no hay elementos en el historial de sincronización :)') {
                 audioList.innerHTML = '';
             }
 
