@@ -52,15 +52,8 @@
         "publish": {
             "provider": "github",
             "owner": "1ndoryu",
-            "repo": "sync2upra"
-        },
-        "publish": [
-             {
-               "provider": "github",
-               "owner": "1ndoryu",
-               "repo": "sync2upra",
-               "publish": "always"
-              }
-         ]
+            "repo": "sync2upra",
+            "publish": "onTag" 
+        }
     }
 }
