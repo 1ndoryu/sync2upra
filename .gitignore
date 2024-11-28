@@ -1,0 +1,20 @@
+# Logs
+logs/
+*.log
+
+# Desarrollo
+/dist/
+/out/
+/release/
+node_modules/
+
+# Cache
+.cache/
+
+# Dependencias
+/npm-debug.log*
+yarn-error.log
+
+# Sistema
+.DS_Store
+Thumbs.db

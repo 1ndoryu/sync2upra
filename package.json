@@ -1,0 +1,25 @@
+{
+    "name": "sync-2upra",
+    "version": "1.0.0",
+    "main": "main.js",
+    "scripts": {
+        "start": "electron ."
+    },
+    "keywords": [
+        "sync",
+        "2upra",
+        "nodejs"
+    ],
+    
+    "author": "1ndoryu@2upra.com",
+    "license": "MIT",
+    "description": "Sync 2upra",
+    "devDependencies": {
+        "electron": "^33.2.0"
+    },
+    "dependencies": {
+        "axios": "^1.7.7",
+        "electron-store": "^10.0.0",
+        "node-fetch": "^3.3.2"
+    }
+}
