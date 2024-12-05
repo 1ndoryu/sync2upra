@@ -9,7 +9,6 @@ const {appWindow} = require('../main.js');
 let Store;
 let store;
 
-
 (async () => {
     try {
         Store = (await import('electron-store')).default;
@@ -40,25 +39,50 @@ const downloadFile = async (url, filePath) => {
     });
 };
 
+/*
+parece que no verifica las imagenes ya fueron descargadas e intenta descargarla varias veces
+las borra y despues las vuelve a descargar
+
+Evento registrado: delete - {
+  filePath: 'C:\\Users\\1u\\Documents\\Audios3\\.hidden_images\\Pinterest_Download-32-11.jpg'
+}
+Imagen descargada y almacenada en: C:\Users\1u\Documents\Audios3\.hidden_images\pincase202411036949.jpeg
+Evento registrado: image-download - {
+  userId: '355',
+  imagePath: 'C:\\Users\\1u\\Documents\\Audios3\\.hidden_images\\pincase202411036949.jpeg'
+}
+*/
+
 const syncSingleAudio = async (userId, postId, downloadDir) => {
     const url = `${API_BASE}/1/v1/syncpre/${userId}?post_id=${postId}`;
     try {
         const response = await axios.get(url, {
-            headers: {'X-Electron-App': 'true'},
+            headers: { 'X-Electron-App': 'true' },
             withCredentials: true
         });
+
         const audioToDownload = response.data[0];
         if (!audioToDownload || !audioToDownload.download_url) return;
 
+        // Manejo del directorio de audios
         const collectionDir = path.join(downloadDir, audioToDownload.collection);
         if (!fs.existsSync(collectionDir)) {
-            fs.mkdirSync(collectionDir, {recursive: true});
+            fs.mkdirSync(collectionDir, { recursive: true });
         }
-        const filePath = path.join(collectionDir, audioToDownload.audio_filename);
-        await downloadFile(audioToDownload.download_url, filePath);
+        const audioFilePath = path.join(collectionDir, audioToDownload.audio_filename);
 
-        logSyncEvent('download', {userId, filePath});
-        ipcMain.emit('sync-file-downloaded', filePath);
+        // Descargar el audio
+        await downloadFile(audioToDownload.download_url, audioFilePath);
+        logSyncEvent('download', { userId, filePath: audioFilePath });
+
+        // Manejo del directorio temporal para imágenes
+        const tempImageDir = path.join(downloadDir, '.hidden_images');
+        if (audioToDownload.image) {
+            const imagePath = await handleImageDownload(audioToDownload.image, tempImageDir);
+            logSyncEvent('image-download', { userId, imagePath });
+        }
+
+        ipcMain.emit('sync-file-downloaded', audioFilePath);
     } catch (error) {
         console.error('Error al sincronizar audio individual:', error);
     }
@@ -69,29 +93,38 @@ const syncAudios = async (userId, downloadDir) => {
     const url = `${API_BASE}/1/v1/syncpre/${userId}`;
     try {
         const response = await axios.get(url, {
-            headers: {'X-Electron-App': 'true'},
+            headers: { 'X-Electron-App': 'true' },
             withCredentials: true
         });
-        const audiosToDownload = response.data;
 
+        const audiosToDownload = response.data;
         if (!audiosToDownload || audiosToDownload.length === 0) {
             cleanDownloadDir(downloadDir);
         } else {
             prepareDownloadDir(downloadDir, audiosToDownload);
 
+            const tempImageDir = path.join(downloadDir, '.hidden_images'); // Carpeta para imágenes
             for (const audio of audiosToDownload) {
                 if (audio.download_url) {
+                    // Descargar audio
                     await handleFileDownload(audio, downloadDir, userId);
                 }
+
+                if (audio.image) {
+                    // Descargar imagen asociada
+                    const imagePath = await handleImageDownload(audio.image, tempImageDir);
+                    logSyncEvent('image-download', { userId, imagePath });
+                }
             }
+
             lastSyncTimestamp = Math.floor(Date.now() / 1000);
             store?.set('lastSyncTimestamp', lastSyncTimestamp);
         }
 
-        ipcMain.emit('sync-completed'); // Emitir el evento siempre
+        ipcMain.emit('sync-completed');
     } catch (error) {
         console.error('Error al sincronizar audios:', error);
-        ipcMain.emit('sync-error', error); // Emitir evento de error
+        ipcMain.emit('sync-error', error);
     }
 };
 
@@ -110,19 +143,61 @@ const handleFileDownload = async (audio, downloadDir, userId) => {
     }
 };
 
+const handleImageDownload = async (imageUrl, tempDir) => {
+    try {
+        // Crear el directorio si no existe
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+
+        // Generar un nombre de archivo único basado en la URL
+        const fileName = path.basename(new URL(imageUrl).pathname);
+        const filePath = path.join(tempDir, fileName);
+
+        // Verificar si ya existe la imagen
+        if (fs.existsSync(filePath)) {
+            console.log(`Imagen ya existe, se omite la descarga: ${filePath}`);
+            return filePath; // Retornar la ruta existente
+        }
+
+        // Descargar la imagen si no existe
+        console.log(`Descargando imagen desde: ${imageUrl}`);
+        const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+
+        // Guardar la imagen en el archivo
+        fs.writeFileSync(filePath, Buffer.from(response.data));
+        console.log(`Imagen descargada y almacenada en: ${filePath}`);
+        
+        return filePath; // Retornar la ruta del archivo descargado
+    } catch (error) {
+        console.error('Error al descargar o manejar la imagen:', error);
+        throw error;
+    }
+};
 const prepareDownloadDir = (downloadDir, audiosToDownload) => {
     if (!fs.existsSync(downloadDir)) {
-        fs.mkdirSync(downloadDir, {recursive: true});
+        fs.mkdirSync(downloadDir, { recursive: true });
     }
 
     const remoteFilePaths = new Set(
-        audiosToDownload.map(audio => {
+        audiosToDownload.map((audio) => {
             const collectionDir = path.join(downloadDir, audio.collection);
             return path.join(collectionDir, audio.audio_filename);
         })
     );
 
+    const tempImageDir = path.join(downloadDir, '.hidden_images');
+    const remoteImagePaths = new Set(
+        audiosToDownload
+            .filter((audio) => audio.image) // Filtrar solo audios con imágenes
+            .map((audio) => {
+                const fileName = path.basename(new URL(audio.image).pathname);
+                return path.join(tempImageDir, fileName); // Generar la ruta correcta
+            })
+    );
+
     cleanLocalFiles(downloadDir, remoteFilePaths);
+    cleanImageDir(tempImageDir, remoteImagePaths); // Pasar la lista completa de imágenes remotas
 };
 
 const cleanLocalFiles = (downloadDir, remoteFilePaths) => {
@@ -154,11 +229,29 @@ const cleanLocalFiles = (downloadDir, remoteFilePaths) => {
 
 const cleanDownloadDir = downloadDir => {
     if (fs.existsSync(downloadDir)) {
-        fs.rmSync(downloadDir, {recursive: true, force: true});
-        logSyncEvent('delete-all', {downloadDir});
+        fs.rmSync(downloadDir, { recursive: true, force: true });
+        logSyncEvent('delete-all', { downloadDir });
+
+        // Eliminar imágenes
+        const tempImageDir = path.join(downloadDir, '.hidden_images');
+        cleanImageDir(tempImageDir);
     }
 };
+const cleanImageDir = (tempImageDir, remoteImagePaths) => {
+    if (!fs.existsSync(tempImageDir)) return;
 
+    const localImages = fs.readdirSync(tempImageDir).map((file) =>
+        path.join(tempImageDir, file)
+    );
+
+    for (const localImage of localImages) {
+        // Solo eliminar imágenes que no están en la lista de imágenes remotas
+        if (!remoteImagePaths || !remoteImagePaths.has(localImage)) {
+            fs.unlinkSync(localImage); // Eliminar imágenes no referenciadas
+            logSyncEvent('delete-image', { filePath: localImage });
+        }
+    }
+};
 const logSyncEvent = (eventType, details) => {
     const historyFile = path.join(store.get('downloadDir'), 'sync-history.json');
     const timestamp = new Date().toISOString();

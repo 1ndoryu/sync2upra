@@ -91,11 +91,6 @@ async function verifyToken(token) {
 
             const data = await response.json();
             console.log('Datos del servidor:', data);
-            /*
-            se queda colgado en esta parte y este es el ultimo log que muestra
-            Datos del servidor: { user_id: '355', status: 'valid' }
-            Token v├ílido. UserId: 355
-            */
             if (data.status === 'valid') {
                 console.log('Token válido. UserId:', data.user_id);
                 userId = data.user_id;
@@ -189,7 +184,7 @@ function createAppWindow() {
         show: false,
         skipTaskbar: true,
         alwaysOnTop: true,
-        webPreferences: {preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, devTools: false}
+        webPreferences: {preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, devTools: true}
     });
 
     const userId = store.get('userId');
