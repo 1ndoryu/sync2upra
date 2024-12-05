@@ -184,7 +184,12 @@ function createAppWindow() {
         show: false,
         skipTaskbar: true,
         alwaysOnTop: true,
-        webPreferences: {preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, devTools: true}
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            devTools: false
+        }
     });
 
     const userId = store.get('userId');
@@ -199,9 +204,22 @@ function createAppWindow() {
     }
 
     appWindow.loadFile('./src/renderer/index.html');
+
+    // Abre las herramientas de desarrollo automáticamente
+    // appWindow.webContents.openDevTools();
+
+    // Eventos de la ventana
     appWindow.once('ready-to-show', () => mainWindow?.close());
     appWindow.on('blur', () => isAppWindowVisible && hideAppWindow());
-    appWindow.on('close', event => (app.quitting ? (appWindow = null) : (event.preventDefault(), appWindow.hide(), (isAppWindowVisible = false))));
+    appWindow.on('close', event => {
+        if (!app.quitting) {
+            event.preventDefault();
+            appWindow.hide();
+            isAppWindowVisible = false;
+        } else {
+            appWindow = null;
+        }
+    });
 
     return appWindow;
 }
@@ -255,7 +273,20 @@ autoUpdater.on('update-downloaded', info => {
         });
 });
 
-//FUNCIONES
+//No funciona esto <button id="cambiarCarpeta">Selecionar carpeta</button>
+ipcMain.on('cambiarCarpeta', async event => {
+    try {
+        // Llamar a getDownloadDirectory() para usar la misma lógica
+        const newDownloadDir = await getDownloadDirectory();
+        
+        if (newDownloadDir) {
+            event.reply('carpeta-cambiada', newDownloadDir);
+        }
+    } catch (error) {
+        console.error('Error al cambiar de carpeta:', error);
+        event.reply('carpeta-cambiada-error', error.message);
+    }
+});
 
 async function getDownloadDirectory() {
     let config = {};
@@ -263,23 +294,235 @@ async function getDownloadDirectory() {
         try {
             config = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
             if (config.downloadDir) return config.downloadDir;
-            else console.warn('Archivo config sin "downloadDir".');
         } catch (error) {
             console.error('Error al leer o parsear config:', error);
         }
     }
-    const result = await dialog.showOpenDialog({properties: ['openDirectory']});
-    if (!result.canceled && result.filePaths.length > 0) {
-        const downloadDir = result.filePaths[0];
-        try {
-            config.downloadDir = downloadDir;
-            fs.writeFileSync(configFilePath, JSON.stringify(config));
-            return downloadDir;
-        } catch (error) {
-            console.error('Error al guardar config:', error);
+
+    // Crear estilos CSS personalizados
+    const customCSS = `
+        :root {
+            --fondo: #070707;
+            --borde: 1px #161616 solid;
+            --radius: 5px;
+            --bordeBoton: 1px #1f1f1f8c solid;
+            --padding: 20px;
+            --ancho: 600px;
+            --font: 11px;
+            --color: #d4d4d4;
+            --line-height: 1.6;
         }
-    }
-    return null;
+        @font-face {
+            font-family: 'Source Sans 3';
+            src: url('src/fonts/SourceSans3-Regular.woff2') format('woff2');
+            font-weight: 400;
+            font-style: normal;
+        }
+
+        html, body {
+            background: transparent !important;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .dialog {
+            max-width: var(--ancho);
+            margin: auto;
+            background-color: var(--fondo);
+            color: var(--color);
+            font-size: var(--font);
+            line-height: var(--line-height);
+            padding: var(--padding);
+            border-radius: var(--radius);
+            padding-top: 10px;
+        }
+
+        button {
+            background-color: var(--fondo);
+            border: var(--bordeBoton);
+            color: var(--color);
+            border-radius: var(--radius);
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 11px;
+            opacity: 0.8;
+        }
+        
+        .fl {
+            display: flex;
+            gap: 10px;
+        }
+
+        * {
+            user-select: none;
+            user-drag: none;
+            app-region: no-drag;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+        
+        p {
+        opacity: 0.8;
+        }
+
+        body,
+        body p,
+        textarea {
+            font-family: 'Source Sans 3', Arial, Helvetica, sans-serif !important;
+            font-weight: 400px;
+            font-style: normal;
+            color: #d4d4d4;
+            line-height: 1.6;
+            letter-spacing: 0px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+            text-decoration: none;
+            text-wrap: pretty;
+            
+        }
+
+        button:hover {
+            background-color: #1a1a1a;
+        }
+    `;
+
+    // Crear una ventana personalizada
+    const customWindow = new BrowserWindow({
+        width: 600,
+        height: 170,
+        backgroundColor: '#00000000', // Fondo transparente
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        },
+        frame: false,
+        transparent: true,
+        resizable: false,
+        hasShadow: false // Opcional: elimina la sombra de la ventana
+    });
+
+    // Crear contenido HTML
+    const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>${customCSS}</style>
+        </head>
+        <body>
+            <div class="dialog">
+                <p>Seleccionar Carpeta de Descargas</p>
+                <p>Por favor, selecciona la carpeta donde se creará el directorio "Sync 2upra" para guardar los archivos.</p>
+                <div class="fl">  
+                    <button id="selectFolder">Seleccionar Carpeta</button>
+                    <button id="cancel">Cancelar</button>
+                </div>
+            </div>
+            <script>
+                const { ipcRenderer } = require('electron');
+                
+                document.getElementById('selectFolder').addEventListener('click', () => {
+                    ipcRenderer.send('select-folder');
+                });
+
+                document.getElementById('cancel').addEventListener('click', () => {
+                    ipcRenderer.send('cancel-selection');
+                });
+            </script>
+        </body>
+        </html>
+    `;
+
+    // Cargar el contenido HTML en la ventana
+    customWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+
+    // Manejar la selección de carpeta
+    ipcMain.once('select-folder', async () => {
+        const result = await dialog.showOpenDialog({
+            properties: ['openDirectory'],
+            defaultPath: app.getPath('downloads'),
+            buttonLabel: 'Seleccionar esta carpeta'
+        });
+
+        if (!result.canceled && result.filePaths.length > 0) {
+            const baseDir = result.filePaths[0];
+            const folderName = 'Sync 2upra';
+            const downloadDir = path.join(baseDir, folderName);
+
+            try {
+                if (!fs.existsSync(downloadDir)) {
+                    fs.mkdirSync(downloadDir, {recursive: true});
+                }
+
+                const files = fs.readdirSync(downloadDir);
+                if (files.length > 0) {
+                    let counter = 1;
+                    let newDownloadDir = downloadDir;
+                    while (fs.existsSync(newDownloadDir) && fs.readdirSync(newDownloadDir).length > 0) {
+                        newDownloadDir = path.join(baseDir, `${folderName} (${counter})`);
+                        counter++;
+                    }
+                    fs.mkdirSync(newDownloadDir, {recursive: true});
+                    config.downloadDir = newDownloadDir;
+                } else {
+                    config.downloadDir = downloadDir;
+                }
+
+                fs.writeFileSync(configFilePath, JSON.stringify(config));
+                customWindow.close();
+                return config.downloadDir;
+            } catch (error) {
+                console.error('Error al crear directorio o guardar config:', error);
+                // Mostrar mensaje de error con los mismos estilos
+                const errorWindow = new BrowserWindow({
+                    width: 400,
+                    height: 200,
+                    backgroundColor: '#070707',
+                    frame: false,
+                    transparent: true
+                });
+
+                const errorHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <style>${customCSS}</style>
+                    </head>
+                    <body>
+                        <div class="dialog">
+                            <h2>Error</h2>
+                            <p>Hubo un error al crear el directorio de descargas.</p>
+                            <button onclick="window.close()">Aceptar</button>
+                        </div>
+                    </body>
+                    </html>
+                `;
+
+                errorWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`);
+            }
+        }
+    });
+
+    ipcMain.once('cancel-selection', () => {
+        customWindow.close();
+        return null;
+    });
+
+    return new Promise(resolve => {
+        customWindow.on('closed', () => {
+            resolve(config.downloadDir || null);
+        });
+    });
 }
 
 function createTray() {
@@ -345,23 +588,65 @@ ipcMain.handle('fetch-user-profile', async (_, receptorId) => {
     }
 });
 
+/*
+Error occurred in handler for 'get-sync-history': TypeError [ERR_INVALID_ARG_TYPE]: The "path" argument must be of type string. Received undefined
+    at Object.dirname (node:path:722:5)
+    at C:\Users\1u\Documents\Sync 2upra\main.js:353:47
+    at Array.map (<anonymous>)
+    at C:\Users\1u\Documents\Sync 2upra\main.js:350:20
+    at async WebContents.<anonymous> (node:electron/js2c/browser_init:2:86542) {
+  code: 'ERR_INVALID_ARG_TYPE'
+}
+*/
+
 ipcMain.handle('get-sync-history', async () => {
-    const history = await getSyncHistory();
-    return history.map(event => {
-        const {timestamp, eventType, details} = event;
-        const filePath = details.filePath;
-        const folderName = path.basename(path.dirname(filePath));
-        const fileName = path.basename(filePath);
-        return {
-            timestamp,
-            eventType,
-            details: {
-                ...details,
-                folderName,
-                fileName
-            }
-        };
-    });
+    //console.log('get-sync-history: Iniciando la obtención del historial de sincronización.');
+    try {
+        const historial = await getSyncHistory();
+        //console.log('get-sync-history: Historial de sincronización obtenido:', historial);
+        const resultado = historial
+            .map(evento => {
+                //console.log('get-sync-history: Procesando evento:', evento);
+                const {timestamp, eventType, userId, audio, image} = evento;
+
+                let rutaArchivo = null;
+                if (audio) rutaArchivo = audio;
+                if (image) rutaArchivo = image;
+
+                if (!rutaArchivo) {
+                    //console.warn('get-sync-history: El evento no tiene una ruta de archivo válida:', evento);
+                    return null;
+                }
+                const nombreCarpeta = path.basename(path.dirname(rutaArchivo));
+                const nombreArchivo = path.basename(rutaArchivo);
+                //console.log('get-sync-history: Detalles del archivo procesado:', { rutaArchivo, nombreCarpeta, nombreArchivo });
+
+                const detalles = {
+                    rutaArchivo,
+                    nombreCarpeta,
+                    nombreArchivo,
+                    userId,
+                    audio,
+                    image
+                };
+                return {
+                    timestamp,
+                    eventoTipo: eventType,
+                    detalles
+                };
+            })
+            .filter(item => {
+                if (item === null) {
+                    //console.log('get-sync-history: Filtrando evento nulo.');
+                }
+                return item !== null;
+            });
+        //console.log('get-sync-history: Resultado del procesamiento:', resultado);
+        return resultado;
+    } catch (error) {
+        //console.error('get-sync-history: Error al obtener o procesar el historial de sincronización:', error);
+        return [];
+    }
 });
 
 ipcMain.handle('open-folder', async (event, filePath) => {
@@ -431,21 +716,6 @@ ipcMain.on('logout', async () => {
     }
 });
 
-ipcMain.on('cambiarCarpeta', async event => {
-    try {
-        const result = await dialog.showOpenDialog({properties: ['openDirectory']});
-        if (!result.canceled && result.filePaths.length > 0) {
-            const newDownloadDir = result.filePaths[0];
-            let config = fs.existsSync(configFilePath) ? JSON.parse(fs.readFileSync(configFilePath, 'utf8')) : {};
-            config.downloadDir = newDownloadDir;
-            fs.writeFileSync(configFilePath, JSON.stringify(config));
-            //event.reply('carpeta-cambiada', newDownloadDir);
-        }
-    } catch (error) {
-        console.error('Error al cambiar de carpeta:', error);
-        //event.reply('carpeta-cambiada-error', error.message);
-    }
-});
 
 ipcMain.on('reiniciar', async () => {
     if (appWindow) {

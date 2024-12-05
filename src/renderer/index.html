@@ -1,6 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
+        <style>
+            @font-face {
+                font-family: 'Source Sans 3';
+                src: url('../fonts/SourceSans3-Regular.woff2') format('woff2');
+                font-weight: 400;
+                font-style: normal;
+            }
+
+            @font-face {
+                font-family: 'Source Sans 3';
+                src: url('./fonts/SourceSans3-Bold.woff2') format('woff2');
+                font-weight: 700;
+                font-style: normal;
+            }
+        </style>
         <meta charset="UTF-8" />
         <title>Sincronizador de Audios</title>
     </head>
@@ -8,7 +23,7 @@
         <div class="app">
             <div id="user-profile">
                 <img id="user-profile-image" src="" alt="Perfil del usuario" />
-                <h3 id="user-profile-name" style="display: none"></h3>
+                <p id="user-profile-name"></p>
                 <button id="sync-button">
                     <svg data-testid="geist-icon" height="16" stroke-linejoin="round" viewBox="0 0 16 16" width="16" style="color: currentcolor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.00002 1.25C5.33749 1.25 3.02334 2.73677 1.84047 4.92183L1.48342 5.58138L2.80253 6.29548L3.15958 5.63592C4.09084 3.91566 5.90986 2.75 8.00002 2.75C10.4897 2.75 12.5941 4.40488 13.2713 6.67462H11.8243H11.0743V8.17462H11.8243H15.2489C15.6631 8.17462 15.9989 7.83883 15.9989 7.42462V4V3.25H14.4989V4V5.64468C13.4653 3.06882 10.9456 1.25 8.00002 1.25ZM1.50122 10.8555V12.5V13.25H0.0012207V12.5V9.07538C0.0012207 8.66117 0.337007 8.32538 0.751221 8.32538H4.17584H4.92584V9.82538H4.17584H2.72876C3.40596 12.0951 5.51032 13.75 8.00002 13.75C10.0799 13.75 11.8912 12.5958 12.8266 10.8895L13.1871 10.2318L14.5025 10.9529L14.142 11.6105C12.9539 13.7779 10.6494 15.25 8.00002 15.25C5.05453 15.25 2.53485 13.4313 1.50122 10.8555Z" fill="currentColor"></path></svg>
                 </button>
@@ -20,7 +35,7 @@
                 <div class="A1806241" id="opciones-opciones">
                     <div class="A1806242">
                         <button id="logout-button">Cerrar sesión</button>
-                        <button id="cambiarCarpeta">Selecionar carpeta</button>
+                        
                         <button id="reiniciar">Reiniciar</button>
                     </div>
                 </div>
@@ -71,6 +86,13 @@
     .A1806242 button:hover {
         background: black;
     }
+    p#user-profile-name {
+        font-size: 12px;
+        margin: 0;
+    }
+    li:hover {
+        background: #0c0c0c;
+    }
 
     ::-webkit-scrollbar {
         width: 0px;
@@ -94,23 +116,37 @@
         gap: 5px;
         overflow-x: overlay;
         height: 440px;
-        padding: 10px;
+        padding: 8px;
         margin: 0;
     }
     div#user-profile {
-        background: #000000;
-        padding: 10px 10px;
+        /* background: #000000; */
+        padding: 10px 16px;
+        padding-left: 16px;
+        padding-top: 15px;
+        padding-bottom: 0px;
         display: flex;
         align-items: center;
         align-content: center;
         flex-direction: row;
         border-radius: 5px 5px;
-        gap: 10px;
-
+        gap: 15px;
+        margin-bottom: 0px;
+    }
+    button#opciones {
+        transform: rotate(270deg);
+    }
+    .icon-container img {
+        max-height: 30px;
+        max-width: 30px;
+        aspect-ratio: 1;
+        border-radius: 5px;
+        object-fit: cover;
     }
     .app {
         background: var(--fondo);
         border-radius: 5px;
+        border: var(--borde);
     }
     .icon-container {
         display: flex;
@@ -150,18 +186,19 @@
 
     li {
         font-size: 11px;
-        padding: 10px;
+        padding: 9px 10px;
         border-radius: 5px;
         display: flex;
         flex-direction: column;
         background: var(--fondo);
+        cursor: pointer;
     }
 
     img#user-profile-image {
-        height: 25px;
+        height: 30px;
         border-radius: 50%;
         aspect-ratio: 1 / 1;
-        width: 25px;
+        width: 30px;
         object-fit: cover;
     }
 
