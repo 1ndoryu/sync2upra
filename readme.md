@@ -1,4 +1,4 @@
 <div style='display: flex; justify-content: center; align-items: center;'>
     <p>2upra</p>
-    <img src="/build/icon.png" />
+    <img src="/build/icon.png" width=30 height=30/>
 </div>
