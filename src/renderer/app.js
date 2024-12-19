@@ -1,4 +1,4 @@
-const {getSyncHistory, openFolder} = window.electron;
+const { getSyncHistory, openFolder } = window.electron;
 let currentHistoryItems = new Set();
 
 async function inicializarAplicacion() {
@@ -6,7 +6,7 @@ async function inicializarAplicacion() {
     const downloadDir = await window.electronAPI.invoke('get-download-dir');
     if (!userId) return console.error('Error: No se encontró un ID de usuario válido');
     if (downloadDir) {
-        window.electronAPI.send('start-sync', {userId, downloadDir});
+        window.electronAPI.send('start-sync', { userId, downloadDir });
     } else {
         console.error('Error: No se pudo obtener el directorio de descarga');
     }
@@ -25,11 +25,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error(`Error al cargar el historial de sincronización (intentos restantes: ${intentosRestantes}):`, error);
             if (intentosRestantes > 0) {
-                await new Promise(resolve => setTimeout(resolve, 3000)); // Esperar 3 segundos
-                await intentarCargarHistorial(intentosRestantes - 1); // Reintentar
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                await intentarCargarHistorial(intentosRestantes - 1);
             } else {
                 console.error('Se superó el número máximo de intentos para cargar el historial de sincronización.');
-                // Aquí puedes mostrar un mensaje de error al usuario o realizar otra acción.
             }
         }
     }
@@ -56,6 +55,15 @@ document.addEventListener('sync-single-audio', async event => {
         console.error('Error: No se pudo obtener el ID de usuario o el directorio de descarga para sincronizar el audio individual');
     }
 });
+
+document.getElementById('sync-button')?.addEventListener('click', async () => {
+    const button = document.getElementById('sync-button');
+    button.classList.add('loading-sync');
+
+    setTimeout(() => {
+        button.classList.remove('loading-sync');
+    }, 1200);
+})
 
 async function fetchUserProfile(receptorId) {
     try {
@@ -107,23 +115,59 @@ function mostrarErrorSincronizacion() {
     audioList.appendChild(errorMessage);
 }
 
+// Función para intentar tratar el tiempo transcurrido en la sincronización
+// No borren los comentarios, de esta manera iremos documentando el código para que sea 
+// más fácil de entener y empezar a refactorizar
+// Por ejemplo, esta función no debería estar aquí, en el futuro va a estar en una carpeta utils o algo.
+// Anthony xo.
+/*
+@param {string} timestamp - La fecha y hora en formato ISO 8601
+@return {string} - El tiempo transcurrido en el pasado
+*/
+function calculateTimePassed(isoString) { 
+    const givenDate = new Date(isoString); 
+    const currentDate = new Date(); 
+    
+    const differenceInMilliseconds = currentDate.getTime() - givenDate.getTime(); 
+
+    const differenceInDays = Math.floor(differenceInMilliseconds / (1000 * 60 * 60 * 24)); 
+    const differenceInHours = Math.floor(differenceInMilliseconds / (1000 * 60 * 60)); 
+    const differenceInMinutes = Math.floor(differenceInMilliseconds / (1000 * 60));
+
+    // Formatear de forma amigable la fecha en la cual esta siendo sincronizado el audio
+    if (differenceInDays > 0) {
+        return { s: `hace ${differenceInDays} días` };
+    }
+
+    if (differenceInHours == 1) {
+        return { s: `hace ${differenceInHours} hora` };
+    } else if (differenceInHours > 1) {
+        return { s: `hace ${differenceInHours} horas` };
+    }
+
+    if (differenceInMinutes > 1) {
+        return { s: `hace ${differenceInMinutes} minutos` };
+    } else if (differenceInMinutes < 1) {
+        return { s: `hace menos de un minuto` };
+    }
+}
+
 // Función para actualizar el tiempo transcurrido dinámicamente
 function updateTimeAgoElements() {
-    const currentTime = Date.now();
     const statusMessages = document.querySelectorAll('.status-message');
+    console.log(statusMessages)
 
     statusMessages.forEach(statusElement => {
         const timestamp = statusElement.dataset.timestamp;
 
         if (timestamp) {
-            const timeAgoString = timeAgo(new Date(parseInt(timestamp, 10)));
+            const timeAgoString = timestamp;
             const originalText = statusElement.textContent;
 
-            // Detecta si es un mensaje de sincronización o eliminación
             if (originalText.includes('Sincronizado')) {
-                statusElement.textContent = `Sincronizado ${timeAgoString}`;
+                statusElement.textContent = `Sincronizado ${calculateTimePassed(timestamp).s}`;
             } else if (originalText.includes('Eliminado')) {
-                statusElement.textContent = `Eliminado ${timeAgoString}`;
+                statusElement.textContent = `Eliminado ${calculateTimePassed(timestamp).s}`;
             }
         }
     });
@@ -138,7 +182,6 @@ function loadAndDisplaySyncHistory() {
 
     getSyncHistory()
         .then(history => {
-            console.log('Historial recibido:', history); // Verificar si se recibe el historial correctamente
 
             const audioList = document.getElementById('audio-list');
             if (!audioList) {
@@ -147,8 +190,7 @@ function loadAndDisplaySyncHistory() {
             }
 
             // Si no hay historial o está vacío
-            if (!history || history.length === 0) {
-                console.log('El historial está vacío.');
+            if (history.length === 0) {
                 if (audioList.innerHTML === '') {
                     audioList.innerHTML = '';
                     const emptyMessage = document.createElement('p');
@@ -157,20 +199,19 @@ function loadAndDisplaySyncHistory() {
                 }
                 return;
             } else if (history && history.length > 0 && audioList.firstChild && audioList.firstChild.tagName === 'P' && audioList.firstChild.textContent === 'Aún no hay elementos en el historial de sincronización :)') {
-                console.log('Eliminando mensaje vacío del historial.');
                 audioList.innerHTML = '';
             }
 
             // Ordenar el historial por fecha (descendente)
             if (history && history.length > 0) {
-                console.log('Ordenando el historial por timestamp.');
                 history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
                 history.forEach(event => {
                     console.log('Procesando evento:', event);
 
                     // Validar que el objeto tenga los campos necesarios
-                    const {timestamp, eventoTipo, detalles} = event; // Cambiado `eventType` por `eventoTipo`
+                    const { timestamp, eventoTipo, detalles } = event;
+                    console.log(`Revisando que mierda hace el timestamp: ${timestamp}`);
 
                     if (!timestamp || !eventoTipo) {
                         console.warn('Evento ignorado porque no tiene timestamp o eventoTipo:', event);
@@ -182,12 +223,11 @@ function loadAndDisplaySyncHistory() {
                         return; // Ignorar eventos sin detalles válidos
                     }
 
-                    const {audio, image} = detalles;
+                    const { audio, image } = detalles;
                     const itemId = `${audio}-${timestamp}`;
 
                     if (currentHistoryItems.has(itemId)) {
-                        console.log(`Elemento duplicado ignorado: ${itemId}`);
-                        return; // Evitar duplicados
+                        return;
                     }
 
                     currentHistoryItems.add(itemId);
@@ -202,11 +242,12 @@ function loadAndDisplaySyncHistory() {
                     iconDiv.className = 'icon-container';
 
                     if (image) {
-                        console.log('Agregando imagen al historial:', image);
                         const img = document.createElement('img');
                         img.src = image;
                         img.alt = 'Imagen asociada';
-                        img.className = 'thumbnail'; // Clase para estilos CSS
+                        // Clase para agregar los estilos en la imagen
+                        // Usando elementos del DOM
+                        img.className = 'thumbnail';
                         iconDiv.appendChild(img);
                     } else {
                         console.log('No se encontró imagen para este evento.');
@@ -225,9 +266,9 @@ function loadAndDisplaySyncHistory() {
 
                     // Manejar los diferentes tipos de eventos
                     if (eventoTipo === 'download') {
-                        const date = new Date(timestamp);
-                        const timeAgoString = timeAgo(date);
-                        statusMessage = `Sincronizado ${timeAgoString}`;
+                        const date = new Date(timestamp).toISOString();
+                        const timeAgoString = date;
+                        statusMessage = `Sincronizado ${calculateTimePassed(timestamp).s}`;
                     } else if (eventoTipo === 'delete') {
                         const date = new Date(timestamp);
                         const timeAgoString = timeAgo(date);
@@ -253,8 +294,7 @@ function loadAndDisplaySyncHistory() {
                     li.appendChild(containerDiv);
                     li.addEventListener('click', () => {
                         if (audio) {
-                            console.log('Abriendo carpeta para el archivo:', audio);
-                            openFolder(audio); // Abrir la carpeta del archivo de audio
+                            openFolder(audio);
                         } else {
                             console.error('Ruta del archivo no está definida.');
                         }

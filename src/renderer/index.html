@@ -24,25 +24,33 @@
             <div id="user-profile">
                 <img id="user-profile-image" src="" alt="Perfil del usuario" />
                 <p id="user-profile-name"></p>
+
                 <button id="sync-button">
                     <svg data-testid="geist-icon" height="16" stroke-linejoin="round" viewBox="0 0 16 16" width="16" style="color: currentcolor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8.00002 1.25C5.33749 1.25 3.02334 2.73677 1.84047 4.92183L1.48342 5.58138L2.80253 6.29548L3.15958 5.63592C4.09084 3.91566 5.90986 2.75 8.00002 2.75C10.4897 2.75 12.5941 4.40488 13.2713 6.67462H11.8243H11.0743V8.17462H11.8243H15.2489C15.6631 8.17462 15.9989 7.83883 15.9989 7.42462V4V3.25H14.4989V4V5.64468C13.4653 3.06882 10.9456 1.25 8.00002 1.25ZM1.50122 10.8555V12.5V13.25H0.0012207V12.5V9.07538C0.0012207 8.66117 0.337007 8.32538 0.751221 8.32538H4.17584H4.92584V9.82538H4.17584H2.72876C3.40596 12.0951 5.51032 13.75 8.00002 13.75C10.0799 13.75 11.8912 12.5958 12.8266 10.8895L13.1871 10.2318L14.5025 10.9529L14.142 11.6105C12.9539 13.7779 10.6494 15.25 8.00002 15.25C5.05453 15.25 2.53485 13.4313 1.50122 10.8555Z" fill="currentColor"></path></svg>
                 </button>
+
                 <button id="start-sync-button" style="display: none"></button>
                 <button id="stop-sync-button" style="display: none"></button>
                 <button class="opciones" id="opciones">
                     <svg data-testid="geist-icon" height="16" stroke-linejoin="round" viewBox="0 0 16 16" width="16" style="color: currentcolor"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 4C7.17157 4 6.5 3.32843 6.5 2.5C6.5 1.67157 7.17157 1 8 1C8.82843 1 9.5 1.67157 9.5 2.5C9.5 3.32843 8.82843 4 8 4ZM8 9.5C7.17157 9.5 6.5 8.82843 6.5 8C6.5 7.17157 7.17157 6.5 8 6.5C8.82843 6.5 9.5 7.17157 9.5 8C9.5 8.82843 8.82843 9.5 8 9.5ZM6.5 13.5C6.5 14.3284 7.17157 15 8 15C8.82843 15 9.5 14.3284 9.5 13.5C9.5 12.6716 8.82843 12 8 12C7.17157 12 6.5 12.6716 6.5 13.5Z" fill="currentColor"></path></svg>
                 </button>
+                
+                
                 <div class="A1806241" id="opciones-opciones">
                     <div class="A1806242">
                         <button id="logout-button">Cerrar sesión</button>
                         
                         <button id="reiniciar">Reiniciar</button>
                     </div>
+                    
                 </div>
+                
+                
+                
             </div>
-
+            
             <ul id="audio-list"></ul>
-
+            
             <script src="app.js"></script>
             <script src="js/submenu.js"></script>
             <script src="js/auxiliar.js"></script>
@@ -72,9 +80,23 @@
         --padding: 20px;
         --ancho: 600px;
     }
+
     button#sync-button {
         margin-left: auto;
     }
+
+    /* Pequeña animación del boton usado para sincronizar  */
+    
+    #sync-button {
+        transition: transform 0.3s ease;
+    }
+    
+    #sync-button:hover {
+        transform: rotate(90deg);
+    }
+    
+    /* Pequeña animación del boton usado para sincronizar  */
+    
     button {
         all: unset;
         cursor: pointer;
@@ -115,10 +137,12 @@
         flex-direction: column;
         gap: 5px;
         overflow-x: overlay;
+        overflow-y: auto;
         height: 440px;
         padding: 8px;
         margin: 0;
     }
+
     div#user-profile {
         /* background: #000000; */
         padding: 10px 16px;
@@ -194,6 +218,24 @@
         cursor: pointer;
     }
 
+    @keyframes rotation {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+
+        0% {
+            transform: rotate(0deg);
+        }
+    }
+
+    .loading-sync {
+        animation: rotation 0.7s infinite linear;
+    }
+
     img#user-profile-image {
         height: 30px;
         border-radius: 50%;
@@ -227,6 +269,7 @@
         text-decoration: none;
         text-wrap: pretty;
     }
+
     .A1806241 {
         display: none;
         background: #080808;
@@ -236,6 +279,7 @@
         overflow: auto;
         border: var(--borde);
     }
+
     .A1806242 button {
         font-family: 'Source Sans 3', Arial, Helvetica, sans-serif !important;
         font-size: 11px;
@@ -245,5 +289,9 @@
         color: white;
         width: -webkit-fill-available;
         width: -moz-available;
+    }
+
+    .A1806241 button:nth-child(1) {
+        color: rgb(255, 81, 81);
     }
 </style>
