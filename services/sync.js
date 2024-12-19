@@ -1,5 +1,5 @@
 //sync.js
-const {ipcMain} = require('electron');
+const { ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -127,6 +127,7 @@ const syncAudios = async (userId, downloadDir) => {
                 }
             }
             lastSyncTimestamp = Math.floor(Date.now() / 1000);
+            
             store?.set('lastSyncTimestamp', lastSyncTimestamp);
         }
         ipcMain.emit('sync-completed');
@@ -181,6 +182,7 @@ const checkForChangesAndSync = async (userId, downloadDir) => {
     const lastSyncTimestamp = store?.get('lastSyncTimestamp') || 0;
     const checkUrl = `${API_BASE}/1/v1/syncpre/${userId}/check?last_sync=${lastSyncTimestamp}`;
     try {
+        console.log(`PARA QUE SIRVE ESTO ${lastSyncTimestamp}`);
         console.log('[checkForChangesAndSync] Iniciando peticion a la API...');
         const response = await axios.get(checkUrl, {
             headers: { 'X-Electron-App': 'true' },
