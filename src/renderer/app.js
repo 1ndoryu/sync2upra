@@ -57,13 +57,20 @@ document.addEventListener('sync-single-audio', async event => {
 });
 
 document.getElementById('sync-button')?.addEventListener('click', async () => {
+    const syncModal = document.getElementById('sync-modal');
     const button = document.getElementById('sync-button');
+    syncModal.classList.add('active');
     button.classList.add('loading-sync');
+    
 
     setTimeout(() => {
+        syncModal.classList.remove('active');
         button.classList.remove('loading-sync');
     }, 1200);
-})
+});
+
+
+
 
 async function fetchUserProfile(receptorId) {
     try {
