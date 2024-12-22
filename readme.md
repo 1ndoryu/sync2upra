@@ -1,7 +1,11 @@
-<div style='display: flex; justify-content: center; align-items: center; width: 100%; text-align: center;'>
-    <p>2upra</p>
-    <img src="/build/icon.png" width=30 height=30/>
-</div>
+# Sync 2upra | v1.0.2
+
+### Se ha agregado un nuevo script para poder depurar bien la aplicación y evitar tener que hacer reload cada vez.
+
+```
+npm run dev 
+```
+
 
 ```js
     // Svg de residuo que no se que hace sinceramente.
