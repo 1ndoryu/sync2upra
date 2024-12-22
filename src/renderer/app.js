@@ -35,8 +35,3 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await intentarCargarHistorial(3);
 });
-
-
-
-
-

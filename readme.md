@@ -1,6 +1,9 @@
 # Sync 2upra | v1.0.2
 
-### Se ha agregado un nuevo script para poder depurar bien la aplicación y evitar tener que hacer reload cada vez.
+Se ha agregado un nuevo script para poder depurar bien la aplicación y evitar tener que hacer reload cada vez que se haga un cambio.
+
+> [!NOTE]
+> Por ahora solo afecta a archivos .js y demás.
 
 ```
 npm run dev 

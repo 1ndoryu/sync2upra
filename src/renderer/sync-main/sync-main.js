@@ -34,7 +34,6 @@ function updateTimeAgoElements() {
         const timestamp = statusElement.dataset.timestamp;
 
         if (timestamp) {
-            const timeAgoString = timestamp;
             const originalText = statusElement.textContent;
 
             if (originalText.includes('Sincronizado')) {
