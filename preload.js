@@ -1,5 +1,11 @@
 //PRELOAD.JS
 
+// Este script (preload.js) se ejecuta en un contexto aislado para el proceso de renderizado,
+// pero tiene acceso a las APIs de Node.js y Electron.
+// Su función principal es actuar como un puente seguro entre el proceso de renderizado (interfaz de usuario)
+// y el proceso principal, exponiendo selectivamente funcionalidades del proceso principal al renderizado.
+// Esto mejora la seguridad al limitar el acceso del renderizado a funciones sensibles.
+
 // Importa módulos de Electron para comunicación entre procesos.
 const { contextBridge, ipcRenderer } = require('electron');
 
