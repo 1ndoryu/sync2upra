@@ -778,9 +778,12 @@ ipcMain.on('fetchData', async (event, args) => {
         const authToken = store.get('authToken');
 
         if (authToken) {
-            console.log('AuthToken encontrado en storage:', authToken);
-            ipcMain.send('auth-token-reply', authToken);
-            console.log('AuthToken enviado a main.js');
+            const data = await verifyToken(authToken);
+            if (data?.userId) {
+                ipcMain.send('auth-token-reply', authToken);
+            } else {
+                handleInvalidToken();
+            }
         } else {
             console.log('No hay authToken en storage');
             handleInvalidToken();

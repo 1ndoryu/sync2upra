@@ -57,7 +57,7 @@
                     </div>
 
                     <div class="sync-modal-content">
-                        <img src="" alt="">IMG
+                        <svg width="16" height="16" stroke-linejoin="round" data-testid="geist-icon" style="color:currentColor"><path fill="currentColor" fill-rule="evenodd" d="M13.5 4v2h-11V2.5H6l1.333 1c.433.325.96.5 1.5.5zM1 6V1h5.167a1 1 0 0 1 .6.2l1.466 1.1a1 1 0 0 0 .6.2H15V6h1l-.167 1.5-.586 5.276A2.5 2.5 0 0 1 12.762 15H3.238a2.5 2.5 0 0 1-2.485-2.224L.167 7.5 0 6zm13 1.5H1.676l.568 5.11a1 1 0 0 0 .994.89h9.524a1 1 0 0 0 .994-.89l.568-5.11z" clip-rule="evenodd"/></svg>
                     </div>
                 </div>
             </div>
@@ -71,6 +71,7 @@
 
 <style>
     /* ESTILOS PARA EL MODAL QUE INDICA QUE SE ESTÁ SINCRONIZANDO */
+
         .sync-loader {
             width: 15px;
             height: 15px;
@@ -87,19 +88,20 @@
             }
         }
 
-
-
         .sync-modal-ft {
             position: relative;
             width: 100%;
         }
 
         .active {
-            opacity: 1 !important;  
+            opacity: 1 !important;
+            pointer-events: unset !important;
+            cursor: not-allowed !important;
         }
         
         .sync-modal {
             opacity: 0;
+            pointer-events: none;
             transition: .2s ease-in-out;
             width: 100%;
             padding: 0 1rem;
@@ -175,13 +177,16 @@
         align-content: center;
         justify-content: center;
     }
+
     .A1806242 button:hover {
         background: black;
     }
+
     p#user-profile-name {
         font-size: 12px;
         margin: 0;
     }
+
     li:hover {
         background: #0c0c0c;
     }
@@ -210,6 +215,7 @@
         overflow-x: overlay;
         height: 440px;
         padding: 8px;
+        border-radius: .6rem;
         margin: 0;
     }
 
@@ -242,7 +248,7 @@
 
     .app {
         background: var(--fondo);
-        border-radius: 1rem;
+        border-radius: 1rem 1rem .8rem .8rem;
         border: var(--borde);
     }
 

@@ -69,9 +69,6 @@ document.getElementById('sync-button')?.addEventListener('click', async () => {
     }, 1200);
 });
 
-
-
-
 async function fetchUserProfile(receptorId) {
     try {
         const userProfile = await window.api.getUserProfile(receptorId);
@@ -113,52 +110,6 @@ function registrarListenersEventos() {
     });
 }
 
-function mostrarErrorSincronizacion() {
-    const audioList = document.getElementById('audio-list');
-    audioList.innerHTML = '';
-    const errorMessage = document.createElement('p');
-    errorMessage.textContent = 'Error al sincronizar. Por favor, inténtalo de nuevo.';
-    errorMessage.style.color = 'red';
-    audioList.appendChild(errorMessage);
-}
-
-// Función para intentar tratar el tiempo transcurrido en la sincronización
-// No borren los comentarios, de esta manera iremos documentando el código para que sea 
-// más fácil de entener y empezar a refactorizar
-// Por ejemplo, esta función no debería estar aquí, en el futuro va a estar en una carpeta utils o algo.
-// Anthony xo.
-/*
-@param {string} timestamp - La fecha y hora en formato ISO 8601
-@return {string} - El tiempo transcurrido en el pasado
-*/
-function calculateTimePassed(isoString) { 
-    const givenDate = new Date(isoString); 
-    const currentDate = new Date(); 
-    
-    const differenceInMilliseconds = currentDate.getTime() - givenDate.getTime(); 
-
-    const differenceInDays = Math.floor(differenceInMilliseconds / (1000 * 60 * 60 * 24)); 
-    const differenceInHours = Math.floor(differenceInMilliseconds / (1000 * 60 * 60)); 
-    const differenceInMinutes = Math.floor(differenceInMilliseconds / (1000 * 60));
-
-    // Formatear de forma amigable la fecha en la cual esta siendo sincronizado el audio
-    if (differenceInDays > 0) {
-        return { s: `hace ${differenceInDays} días` };
-    }
-
-    if (differenceInHours == 1) {
-        return { s: `hace ${differenceInHours} hora` };
-    } else if (differenceInHours > 1) {
-        return { s: `hace ${differenceInHours} horas` };
-    }
-
-    if (differenceInMinutes > 1) {
-        return { s: `hace ${differenceInMinutes} minutos` };
-    } else if (differenceInMinutes < 1) {
-        return { s: `hace menos de un minuto` };
-    }
-}
-
 // Función para actualizar el tiempo transcurrido dinámicamente
 function updateTimeAgoElements() {
     const statusMessages = document.querySelectorAll('.status-message');
@@ -185,7 +136,6 @@ setInterval(updateTimeAgoElements, 60000);
 
 // Función principal de carga e inicialización del historial
 function loadAndDisplaySyncHistory() {
-    console.log('Iniciando loadAndDisplaySyncHistory...');
 
     getSyncHistory()
         .then(history => {
@@ -273,16 +223,11 @@ function loadAndDisplaySyncHistory() {
 
                     // Manejar los diferentes tipos de eventos
                     if (eventoTipo === 'download') {
-                        const date = new Date(timestamp).toISOString();
-                        const timeAgoString = date;
                         statusMessage = `Sincronizado ${calculateTimePassed(timestamp).s}`;
                     } else if (eventoTipo === 'delete') {
-                        const date = new Date(timestamp);
-                        const timeAgoString = timeAgo(date);
-                        statusMessage = `Eliminado ${timeAgoString}`;
+                        statusMessage = `Eliminado ${calculateTimePassed(timestamp).s}`;
                     } else {
-                        console.warn('Evento con tipo desconocido:', eventoTipo);
-                        statusMessage = 'Evento desconocido';
+                        return
                     }
 
                     statusPara.textContent = statusMessage;
@@ -317,19 +262,4 @@ function loadAndDisplaySyncHistory() {
         });
 }
 
-/*
-                    // Crear el segundo ícono SVG
-                    const secondIconDiv = document.createElement('div');
-                    secondIconDiv.className = 'second-icon-container';
-                    const svgIcon2 = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                    svgIcon2.setAttribute('data-testid', 'geist-icon');
-                    svgIcon2.setAttribute('height', '16');
-                    svgIcon2.setAttribute('width', '16');
-                    svgIcon2.setAttribute('viewBox', '0 0 16 16');
-                    svgIcon2.setAttribute('stroke-linejoin', 'round');
-                    svgIcon2.setAttribute('style', 'color: currentcolor');
-                    svgIcon2.innerHTML = `<path fill-rule="evenodd" clip-rule="evenodd" d="M15.5607 3.99999L15.0303 4.53032L6.23744 13.3232C5.55403 14.0066 4.44599 14.0066 3.76257 13.3232L4.2929 12.7929L3.76257 13.3232L0.969676 10.5303L0.439346 9.99999L1.50001 8.93933L2.03034 9.46966L4.82323 12.2626C4.92086 12.3602 5.07915 12.3602 5.17678 12.2626L13.9697 3.46966L14.5 2.93933L15.5607 3.99999Z" fill="currentColor"></path>`;
-                    secondIconDiv.appendChild(svgIcon2);
-                             containerDiv.appendChild(secondIconDiv);
 
-*/
