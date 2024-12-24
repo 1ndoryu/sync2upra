@@ -55,23 +55,31 @@ const syncSingleAudio = async (userId, postId, downloadDir) => {
 
         const collectionDir = path.join(downloadDir, audioToDownload.collection);
         const favoritesDir = path.join(collectionDir, 'favorites'); // Favorites inside collection
+        const audioFilePath = path.join(collectionDir, audioToDownload.audio_filename);
+        const favoriteAudioFilePath = path.join(favoritesDir, audioToDownload.audio_filename); // Path inside collection's favorites
 
         if (!fs.existsSync(collectionDir)) {
             fs.mkdirSync(collectionDir, {recursive: true});
         }
 
-        // Create favorites directory inside collection if it's a favorite
-        if (audioToDownload.es_favorito && !fs.existsSync(favoritesDir)) {
-            fs.mkdirSync(favoritesDir, { recursive: true });
-        }
-
-        const audioFilePath = path.join(collectionDir, audioToDownload.audio_filename);
-        const favoriteAudioFilePath = path.join(favoritesDir, audioToDownload.audio_filename); // Path inside collection's favorites
-
-        await downloadFile(audioToDownload.download_url, audioFilePath);
-
+        // Check if audio exists and if it's a favorite
         if (audioToDownload.es_favorito) {
-            fs.copyFileSync(audioFilePath, favoriteAudioFilePath); // Copy to collection's favorites
+            if (!fs.existsSync(favoritesDir)) {
+                fs.mkdirSync(favoritesDir, { recursive: true });
+            }
+
+            if (fs.existsSync(audioFilePath) && !fs.existsSync(favoriteAudioFilePath)) {
+                // Move the audio to favorites if it exists in the collection but not in favorites
+                fs.renameSync(audioFilePath, favoriteAudioFilePath);
+            } else if (!fs.existsSync(favoriteAudioFilePath)) {
+                // Download directly to favorites if it doesn't exist anywhere
+                await downloadFile(audioToDownload.download_url, favoriteAudioFilePath);
+            }
+        } else {
+            // If it's not a favorite, download normally
+            if (!fs.existsSync(audioFilePath)) {
+                await downloadFile(audioToDownload.download_url, audioFilePath);
+            }
         }
 
         let imagePath = null;
@@ -85,8 +93,8 @@ const syncSingleAudio = async (userId, postId, downloadDir) => {
             }
         }
 
-        logSyncEvent('download', {userId, audioFilePath, imagePath});
-        ipcMain.emit('sync-file-downloaded', {audioFilePath, imagePath});
+        logSyncEvent('download', {userId, audioFilePath: audioToDownload.es_favorito ? favoriteAudioFilePath : audioFilePath, imagePath});
+        ipcMain.emit('sync-file-downloaded', {audioFilePath: audioToDownload.es_favorito ? favoriteAudioFilePath : audioFilePath, imagePath});
     } catch (error) {
         console.error('[syncSingleAudio] Error al sincronizar audio individual:', error);
     }
@@ -106,28 +114,26 @@ const syncAudios = async (userId, downloadDir) => {
         } else {
             prepareDownloadDir(downloadDir, audiosToDownload);
             const tempImageDir = path.join(downloadDir, '.hidden_images');
-            // No need for a global favoritesDir here
 
             for (const audio of audiosToDownload) {
                 let audioFilePath = null;
                 let imagePath = null;
-                let audioDownloaded = false;
+                let audioDownloadedOrMoved = false;
                 let imageDownloaded = false;
-            
+
                 if (audio.download_url) {
-                    const result = await handleFileDownload(audio, downloadDir, userId); // Removed favoritesDir
+                    const result = await handleFileDownload(audio, downloadDir, userId);
                     audioFilePath = result.filePath;
-                    audioDownloaded = result.downloaded;
+                    audioDownloadedOrMoved = result.downloadedOrMoved;
                 }
-            
+
                 if (audio.image) {
                     const imageResult = await handleImageDownload(audio.image, tempImageDir);
                     imagePath = imageResult.filePath;
                     imageDownloaded = imageResult.downloaded;
                 }
-            
-                // Solo registrar si se descargo algo nuevo
-                if (audioDownloaded || imageDownloaded) {
+
+                if (audioDownloadedOrMoved || imageDownloaded) {
                     logSyncEvent('download', {
                         userId,
                         audio: audioFilePath,
@@ -137,7 +143,7 @@ const syncAudios = async (userId, downloadDir) => {
                 }
             }
             lastSyncTimestamp = Math.floor(Date.now() / 1000);
-            
+
             store?.set('lastSyncTimestamp', lastSyncTimestamp);
         }
         ipcMain.emit('sync-completed');
@@ -149,32 +155,38 @@ const syncAudios = async (userId, downloadDir) => {
 
 const handleFileDownload = async (audio, downloadDir, userId) => {
     const collectionDir = path.join(downloadDir, audio.collection);
-    const favoritesDir = path.join(collectionDir, 'favorites'); // Favorites inside collection
+    const favoritesDir = path.join(collectionDir, 'favorites');
+    const filePath = path.join(collectionDir, audio.audio_filename);
+    const favoriteFilePath = path.join(favoritesDir, audio.audio_filename);
 
     if (!fs.existsSync(collectionDir)) {
         fs.mkdirSync(collectionDir, {recursive: true});
     }
 
-    const filePath = path.join(collectionDir, audio.audio_filename);
-    const favoriteFilePath = audio.es_favorito ? path.join(favoritesDir, audio.audio_filename) : null;
-
-    let downloaded = false;
-    if (!fs.existsSync(filePath)) {
-        await downloadFile(audio.download_url, filePath);
-        downloaded = true;
-    }
-
+    let downloadedOrMoved = false;
     if (audio.es_favorito) {
-        // Create favorites directory inside collection
         if (!fs.existsSync(favoritesDir)) {
             fs.mkdirSync(favoritesDir, { recursive: true });
         }
-        if (!fs.existsSync(favoriteFilePath)) {
-            fs.copyFileSync(filePath, favoriteFilePath);
+
+        if (fs.existsSync(filePath) && !fs.existsSync(favoriteFilePath)) {
+            // Move to favorites
+            fs.renameSync(filePath, favoriteFilePath);
+            downloadedOrMoved = true;
+        } else if (!fs.existsSync(favoriteFilePath)) {
+            // Download directly to favorites
+            await downloadFile(audio.download_url, favoriteFilePath);
+            downloadedOrMoved = true;
+        }
+    } else {
+        // If not a favorite, download to collection if it doesn't exist
+        if (!fs.existsSync(filePath)) {
+            await downloadFile(audio.download_url, filePath);
+            downloadedOrMoved = true;
         }
     }
 
-    return { filePath, downloaded };
+    return { filePath: audio.es_favorito ? favoriteFilePath : filePath, downloadedOrMoved };
 };
 
 const prepareDownloadDir = (downloadDir, audiosToDownload) => {
