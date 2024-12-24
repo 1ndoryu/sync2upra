@@ -39,9 +39,6 @@ const downloadFile = async (url, filePath) => {
     });
 };
 
-/*aqui tengo 2 problemas graves, primero, no debería intentar sicronizar imagenes ni nada ni registrar eventos sin que hayan cambios, pero registra eventos de descargas aunque no se descargue nada cada vez que se verifica si las imagenes ya fueron descargas, lo otro es que los logs que se guardan en sync-history.json registra las imagenes y los audios por separados si se supone deben ser un solo evento, cada audio puede tener una imagen, no se si haya que ajustar algo en servidor, en ese caso dimelo o haya que ajustar aca 
-
-*/
 const syncSingleAudio = async (userId, postId, downloadDir) => {
     const url = `${API_BASE}/1/v1/syncpre/${userId}?post_id=${postId}`;
     try {
@@ -57,14 +54,24 @@ const syncSingleAudio = async (userId, postId, downloadDir) => {
         }
 
         const collectionDir = path.join(downloadDir, audioToDownload.collection);
+        const favoritesDir = path.join(downloadDir, 'favoritos'); // New: Favorites directory
 
         if (!fs.existsSync(collectionDir)) {
             fs.mkdirSync(collectionDir, {recursive: true});
         }
 
+        if (audioToDownload.es_favorito && !fs.existsSync(favoritesDir)) { // New: Create favorites directory if it's a favorite
+            fs.mkdirSync(favoritesDir, { recursive: true });
+        }
+
         const audioFilePath = path.join(collectionDir, audioToDownload.audio_filename);
+        const favoriteAudioFilePath = path.join(favoritesDir, audioToDownload.audio_filename); // New: Path in favorites directory
 
         await downloadFile(audioToDownload.download_url, audioFilePath);
+
+        if (audioToDownload.es_favorito) {
+            fs.copyFileSync(audioFilePath, favoriteAudioFilePath); // New: Copy to favorites if needed
+        }
 
         let imagePath = null;
         if (audioToDownload.image) {
@@ -98,6 +105,8 @@ const syncAudios = async (userId, downloadDir) => {
         } else {
             prepareDownloadDir(downloadDir, audiosToDownload);
             const tempImageDir = path.join(downloadDir, '.hidden_images');
+            const favoritesDir = path.join(downloadDir, 'favoritos');
+
             for (const audio of audiosToDownload) {
                 let audioFilePath = null;
                 let imagePath = null;
@@ -105,7 +114,7 @@ const syncAudios = async (userId, downloadDir) => {
                 let imageDownloaded = false;
             
                 if (audio.download_url) {
-                    const result = await handleFileDownload(audio, downloadDir, userId);
+                    const result = await handleFileDownload(audio, downloadDir, userId, favoritesDir); // Modified to handle favorites
                     audioFilePath = result.filePath;
                     audioDownloaded = result.downloaded;
                 }
@@ -137,7 +146,7 @@ const syncAudios = async (userId, downloadDir) => {
     }
 };
 
-const handleFileDownload = async (audio, downloadDir, userId) => {
+const handleFileDownload = async (audio, downloadDir, userId, favoritesDir) => {
     const collectionDir = path.join(downloadDir, audio.collection);
 
     if (!fs.existsSync(collectionDir)) {
@@ -145,15 +154,63 @@ const handleFileDownload = async (audio, downloadDir, userId) => {
     }
 
     const filePath = path.join(collectionDir, audio.audio_filename);
+    const favoriteFilePath = audio.es_favorito ? path.join(favoritesDir, audio.audio_filename) : null;
 
-    // Solo descargar si el archivo no existe
+    let downloaded = false;
     if (!fs.existsSync(filePath)) {
         await downloadFile(audio.download_url, filePath);
-        return {filePath, downloaded: true}; // Indicar que se descargo
+        downloaded = true;
     }
 
-    return {filePath, downloaded: false}; // Indicar que ya existía
+    if (audio.es_favorito) {
+        if (!fs.existsSync(favoritesDir)) {
+            fs.mkdirSync(favoritesDir, { recursive: true });
+        }
+        if (!fs.existsSync(favoriteFilePath)) {
+            fs.copyFileSync(filePath, favoriteFilePath);
+        }
+    }
+
+    return { filePath, downloaded };
 };
+
+const prepareDownloadDir = (downloadDir, audiosToDownload) => {
+    if (!fs.existsSync(downloadDir)) {
+        fs.mkdirSync(downloadDir, {recursive: true});
+    }
+
+    const remoteFilePaths = new Set(
+        audiosToDownload.map(audio => {
+            const collectionDir = path.join(downloadDir, audio.collection);
+            const filePath = path.join(collectionDir, audio.audio_filename);
+            return filePath;
+        })
+    );
+
+    const tempImageDir = path.join(downloadDir, '.hidden_images');
+    if (!fs.existsSync(tempImageDir)) {
+        fs.mkdirSync(tempImageDir, {recursive: true});
+        if (process.platform === 'win32') {
+            const {exec} = require('child_process');
+            exec(`attrib +h "${tempImageDir}"`);
+        }
+    }
+
+    const remoteImagePaths = new Set(
+        audiosToDownload
+            .filter(audio => !!audio.image)
+            .map(audio => {
+                const fileName = path.basename(new URL(audio.image).pathname);
+                return path.join(tempImageDir, fileName);
+            })
+    );
+
+    remoteImagePaths.forEach(imagePath => remoteFilePaths.add(imagePath));
+
+    cleanLocalFiles(downloadDir, remoteFilePaths);
+    cleanImageDir(tempImageDir, remoteImagePaths);
+};
+
 
 const handleImageDownload = async (imageUrl, tempDir) => {
     try {
@@ -201,46 +258,9 @@ const checkForChangesAndSync = async (userId, downloadDir) => {
     } catch (error) {
         console.error('[checkForChangesAndSync] Error al verificar cambios:', error);
     }
-
-
 };
 
-const prepareDownloadDir = (downloadDir, audiosToDownload) => {
-    if (!fs.existsSync(downloadDir)) {
-        fs.mkdirSync(downloadDir, {recursive: true});
-    }
 
-    const remoteFilePaths = new Set(
-        audiosToDownload.map(audio => {
-            const collectionDir = path.join(downloadDir, audio.collection);
-            const filePath = path.join(collectionDir, audio.audio_filename);
-            return filePath;
-        })
-    );
-
-    const tempImageDir = path.join(downloadDir, '.hidden_images');
-    if (!fs.existsSync(tempImageDir)) {
-        fs.mkdirSync(tempImageDir, {recursive: true});
-        if (process.platform === 'win32') {
-            const {exec} = require('child_process');
-            exec(`attrib +h "${tempImageDir}"`);
-        }
-    }
-
-    const remoteImagePaths = new Set(
-        audiosToDownload
-            .filter(audio => !!audio.image)
-            .map(audio => {
-                const fileName = path.basename(new URL(audio.image).pathname);
-                return path.join(tempImageDir, fileName);
-            })
-    );
-
-    remoteImagePaths.forEach(imagePath => remoteFilePaths.add(imagePath));
-
-    cleanLocalFiles(downloadDir, remoteFilePaths);
-    cleanImageDir(tempImageDir, remoteImagePaths);
-};
 
 const cleanImageDir = (tempImageDir, remoteImagePaths) => {
     if (!fs.existsSync(tempImageDir)) return;
