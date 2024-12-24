@@ -54,23 +54,24 @@ const syncSingleAudio = async (userId, postId, downloadDir) => {
         }
 
         const collectionDir = path.join(downloadDir, audioToDownload.collection);
-        const favoritesDir = path.join(downloadDir, 'favoritos'); // New: Favorites directory
+        const favoritesDir = path.join(collectionDir, 'favorites'); // Favorites inside collection
 
         if (!fs.existsSync(collectionDir)) {
             fs.mkdirSync(collectionDir, {recursive: true});
         }
 
-        if (audioToDownload.es_favorito && !fs.existsSync(favoritesDir)) { // New: Create favorites directory if it's a favorite
+        // Create favorites directory inside collection if it's a favorite
+        if (audioToDownload.es_favorito && !fs.existsSync(favoritesDir)) {
             fs.mkdirSync(favoritesDir, { recursive: true });
         }
 
         const audioFilePath = path.join(collectionDir, audioToDownload.audio_filename);
-        const favoriteAudioFilePath = path.join(favoritesDir, audioToDownload.audio_filename); // New: Path in favorites directory
+        const favoriteAudioFilePath = path.join(favoritesDir, audioToDownload.audio_filename); // Path inside collection's favorites
 
         await downloadFile(audioToDownload.download_url, audioFilePath);
 
         if (audioToDownload.es_favorito) {
-            fs.copyFileSync(audioFilePath, favoriteAudioFilePath); // New: Copy to favorites if needed
+            fs.copyFileSync(audioFilePath, favoriteAudioFilePath); // Copy to collection's favorites
         }
 
         let imagePath = null;
@@ -105,7 +106,7 @@ const syncAudios = async (userId, downloadDir) => {
         } else {
             prepareDownloadDir(downloadDir, audiosToDownload);
             const tempImageDir = path.join(downloadDir, '.hidden_images');
-            const favoritesDir = path.join(downloadDir, 'favoritos');
+            // No need for a global favoritesDir here
 
             for (const audio of audiosToDownload) {
                 let audioFilePath = null;
@@ -114,7 +115,7 @@ const syncAudios = async (userId, downloadDir) => {
                 let imageDownloaded = false;
             
                 if (audio.download_url) {
-                    const result = await handleFileDownload(audio, downloadDir, userId, favoritesDir); // Modified to handle favorites
+                    const result = await handleFileDownload(audio, downloadDir, userId); // Removed favoritesDir
                     audioFilePath = result.filePath;
                     audioDownloaded = result.downloaded;
                 }
@@ -146,8 +147,9 @@ const syncAudios = async (userId, downloadDir) => {
     }
 };
 
-const handleFileDownload = async (audio, downloadDir, userId, favoritesDir) => {
+const handleFileDownload = async (audio, downloadDir, userId) => {
     const collectionDir = path.join(downloadDir, audio.collection);
+    const favoritesDir = path.join(collectionDir, 'favorites'); // Favorites inside collection
 
     if (!fs.existsSync(collectionDir)) {
         fs.mkdirSync(collectionDir, {recursive: true});
@@ -163,6 +165,7 @@ const handleFileDownload = async (audio, downloadDir, userId, favoritesDir) => {
     }
 
     if (audio.es_favorito) {
+        // Create favorites directory inside collection
         if (!fs.existsSync(favoritesDir)) {
             fs.mkdirSync(favoritesDir, { recursive: true });
         }
