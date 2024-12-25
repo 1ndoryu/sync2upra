@@ -27,6 +27,27 @@ let lastSyncTimestamp = 0;
 let syncInterval;
 const DOWNLOAD_INTERVAL_MS = 30000;
 
+/*
+aqui parece que intenta descargar varios audios al mismo tiempo, y se guardan 2 registros 
+
+  {
+    "timestamp": "2024-12-24T18:26:07.868Z",
+    "eventType": "download",
+    "userId": "355",
+    "audio": "C:\\Users\\1u\\Documents\\test\\Sync 2upra (1)\\samples-hip-hop-soul\\You-And-I_GzvM_2upra.wav",
+    "image": "C:\\Users\\1u\\Documents\\test\\Sync 2upra (1)\\.hidden_images\\pincase202411038389-3.jpeg"
+  },
+  {
+    "timestamp": "2024-12-24T18:26:11.927Z",
+    "eventType": "download",
+    "userId": "355",
+    "audio": "C:\\Users\\1u\\Documents\\test\\Sync 2upra (1)\\samples-hip-hop-soul\\You-And-I_GzvM_2upra.wav",
+    "image": "C:\\Users\\1u\\Documents\\test\\Sync 2upra (1)\\.hidden_images\\pincase202411038389-3.jpeg"
+  },
+
+  al final solo hay un audio pero es molesto ver el registro 2 veces, puedes verificar 
+*/
+
 const downloadFile = async (url, filePath) => {
     const response = await axios({
         method: 'get',
@@ -54,31 +75,30 @@ const syncSingleAudio = async (userId, postId, downloadDir) => {
         }
 
         const collectionDir = path.join(downloadDir, audioToDownload.collection);
-        const favoritesDir = path.join(collectionDir, 'favorites'); // Favorites inside collection
+        const favoritesDir = path.join(collectionDir, 'favorites');
         const audioFilePath = path.join(collectionDir, audioToDownload.audio_filename);
-        const favoriteAudioFilePath = path.join(favoritesDir, audioToDownload.audio_filename); // Path inside collection's favorites
+        const favoriteAudioFilePath = path.join(favoritesDir, audioToDownload.audio_filename);
+        let audioDownloadedOrMoved = false; // Track if audio was downloaded or moved
 
         if (!fs.existsSync(collectionDir)) {
             fs.mkdirSync(collectionDir, {recursive: true});
         }
 
-        // Check if audio exists and if it's a favorite
         if (audioToDownload.es_favorito) {
             if (!fs.existsSync(favoritesDir)) {
                 fs.mkdirSync(favoritesDir, { recursive: true });
             }
-
             if (fs.existsSync(audioFilePath) && !fs.existsSync(favoriteAudioFilePath)) {
-                // Move the audio to favorites if it exists in the collection but not in favorites
                 fs.renameSync(audioFilePath, favoriteAudioFilePath);
+                audioDownloadedOrMoved = true;
             } else if (!fs.existsSync(favoriteAudioFilePath)) {
-                // Download directly to favorites if it doesn't exist anywhere
                 await downloadFile(audioToDownload.download_url, favoriteAudioFilePath);
+                audioDownloadedOrMoved = true;
             }
         } else {
-            // If it's not a favorite, download normally
             if (!fs.existsSync(audioFilePath)) {
                 await downloadFile(audioToDownload.download_url, audioFilePath);
+                audioDownloadedOrMoved = true;
             }
         }
 
@@ -89,12 +109,17 @@ const syncSingleAudio = async (userId, postId, downloadDir) => {
             imagePath = path.join(tempImageDir, fileName);
 
             if (!fs.existsSync(imagePath)) {
-                imagePath = await handleImageDownload(audioToDownload.image, tempImageDir);
+                const imageResult = await handleImageDownload(audioToDownload.image, tempImageDir);
+                imagePath = imageResult.filePath;
+                // imageDownloaded = imageResult.downloaded; // Removed as not used in syncSingleAudio
             }
         }
 
-        logSyncEvent('download', {userId, audioFilePath: audioToDownload.es_favorito ? favoriteAudioFilePath : audioFilePath, imagePath});
-        ipcMain.emit('sync-file-downloaded', {audioFilePath: audioToDownload.es_favorito ? favoriteAudioFilePath : audioFilePath, imagePath});
+        // Log event only if audio was downloaded or moved
+        if (audioDownloadedOrMoved) {
+            logSyncEvent('download', {userId, audioFilePath: audioToDownload.es_favorito ? favoriteAudioFilePath : audioFilePath, imagePath});
+            ipcMain.emit('sync-file-downloaded', {audioFilePath: audioToDownload.es_favorito ? favoriteAudioFilePath : audioFilePath, imagePath});
+        }
     } catch (error) {
         console.error('[syncSingleAudio] Error al sincronizar audio individual:', error);
     }
@@ -239,14 +264,18 @@ const handleImageDownload = async (imageUrl, tempDir) => {
         // Solo descargar si el archivo no existe
         if (!fs.existsSync(filePath)) {
             const response = await axios.get(imageUrl, {responseType: 'arraybuffer'});
-            fs.writeFileSync(filePath, Buffer.from(response.data));
+            // fs.writeFileSync(filePath, Buffer.from(response.data)); // Esta línea es equivalente a la siguiente
+            fs.writeFileSync(filePath, response.data); // Más conciso y directo, ya que response.data ya es un Buffer
             return {filePath, downloaded: true}; // Indicar que se descargo
         }
 
         return {filePath, downloaded: false}; // Indicar que ya existía
     } catch (error) {
         console.error('[handleImageDownload] Error al descargar o manejar la imagen:', error);
-        throw error;
+        // En lugar de lanzar el error, podrías retornar un objeto con una propiedad de error
+        // para que la función que llama a handleImageDownload pueda manejar el error sin detener la ejecución.
+        // throw error;
+        return { filePath: null, downloaded: false, error: error.message }; // Retorna un objeto con información del error
     }
 };
 
@@ -333,8 +362,9 @@ const startSyncing = (userId, downloadDir) => {
 const logSyncEvent = (eventType, details) => {
     const historyFile = path.join(store.get('downloadDir'), 'sync-history.json');
     const timestamp = new Date().toISOString();
-    const event = {timestamp, eventType, ...details}; // Unificar detalles
+    const event = {timestamp, eventType, ...details}; 
     let history = [];
+    const maxHistoryLength = 50; // Define el máximo de elementos del historial
 
     if (fs.existsSync(historyFile)) {
         try {
@@ -345,6 +375,14 @@ const logSyncEvent = (eventType, details) => {
     }
 
     history.push(event);
+
+    // Ordenar el historial por timestamp de más reciente a más antiguo
+    history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Conservar solo los últimos 'maxHistoryLength' elementos
+    if (history.length > maxHistoryLength) {
+        history = history.slice(0, maxHistoryLength);
+    }
 
     try {
         fs.writeFileSync(historyFile, JSON.stringify(history, null, 2), 'utf8');
