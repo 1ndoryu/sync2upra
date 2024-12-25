@@ -28,24 +28,7 @@ let syncInterval;
 const DOWNLOAD_INTERVAL_MS = 30000;
 
 /*
-aqui parece que intenta descargar varios audios al mismo tiempo, y se guardan 2 registros 
-
-  {
-    "timestamp": "2024-12-24T18:26:07.868Z",
-    "eventType": "download",
-    "userId": "355",
-    "audio": "C:\\Users\\1u\\Documents\\test\\Sync 2upra (1)\\samples-hip-hop-soul\\You-And-I_GzvM_2upra.wav",
-    "image": "C:\\Users\\1u\\Documents\\test\\Sync 2upra (1)\\.hidden_images\\pincase202411038389-3.jpeg"
-  },
-  {
-    "timestamp": "2024-12-24T18:26:11.927Z",
-    "eventType": "download",
-    "userId": "355",
-    "audio": "C:\\Users\\1u\\Documents\\test\\Sync 2upra (1)\\samples-hip-hop-soul\\You-And-I_GzvM_2upra.wav",
-    "image": "C:\\Users\\1u\\Documents\\test\\Sync 2upra (1)\\.hidden_images\\pincase202411038389-3.jpeg"
-  },
-
-  al final solo hay un audio pero es molesto ver el registro 2 veces, puedes verificar 
+el problema es que desde que se agrego la funcionalidad de agregar los audios a la carpeta favorite, se queda en bucle descargando esos audios sin parar aunque ya esten descargados, peculiarme los que estarían en la carpeta favorites
 */
 
 const downloadFile = async (url, filePath) => {
@@ -70,39 +53,19 @@ const syncSingleAudio = async (userId, postId, downloadDir) => {
 
         const audioToDownload = response.data[0];
 
+        const uniqueCollectionNames = new Set();
+        audiosToDownload.forEach(audio => {
+            uniqueCollectionNames.add(audio.collection);
+        });
+        console.log('[syncAudios] Nombres de colecciones recibidas:', Array.from(uniqueCollectionNames));
+
         if (!audioToDownload || !audioToDownload.download_url) {
             return;
         }
 
-        const collectionDir = path.join(downloadDir, audioToDownload.collection);
-        const favoritesDir = path.join(collectionDir, 'favorites');
-        const audioFilePath = path.join(collectionDir, audioToDownload.audio_filename);
-        const favoriteAudioFilePath = path.join(favoritesDir, audioToDownload.audio_filename);
-        let audioDownloadedOrMoved = false; // Track if audio was downloaded or moved
-
-        if (!fs.existsSync(collectionDir)) {
-            fs.mkdirSync(collectionDir, {recursive: true});
-        }
-
-        if (audioToDownload.es_favorito) {
-            if (!fs.existsSync(favoritesDir)) {
-                fs.mkdirSync(favoritesDir, { recursive: true });
-            }
-            if (fs.existsSync(audioFilePath) && !fs.existsSync(favoriteAudioFilePath)) {
-                fs.renameSync(audioFilePath, favoriteAudioFilePath);
-                audioDownloadedOrMoved = true;
-            } else if (!fs.existsSync(favoriteAudioFilePath)) {
-                await downloadFile(audioToDownload.download_url, favoriteAudioFilePath);
-                audioDownloadedOrMoved = true;
-            }
-        } else {
-            if (!fs.existsSync(audioFilePath)) {
-                await downloadFile(audioToDownload.download_url, audioFilePath);
-                audioDownloadedOrMoved = true;
-            }
-        }
-
+        const {filePath: audioFilePath, downloadedOrMoved} = await handleFileDownload(audioToDownload, downloadDir, userId);
         let imagePath = null;
+
         if (audioToDownload.image) {
             const tempImageDir = path.join(downloadDir, '.hidden_images');
             const fileName = path.basename(new URL(audioToDownload.image).pathname);
@@ -111,14 +74,12 @@ const syncSingleAudio = async (userId, postId, downloadDir) => {
             if (!fs.existsSync(imagePath)) {
                 const imageResult = await handleImageDownload(audioToDownload.image, tempImageDir);
                 imagePath = imageResult.filePath;
-                // imageDownloaded = imageResult.downloaded; // Removed as not used in syncSingleAudio
             }
         }
 
-        // Log event only if audio was downloaded or moved
-        if (audioDownloadedOrMoved) {
-            logSyncEvent('download', {userId, audioFilePath: audioToDownload.es_favorito ? favoriteAudioFilePath : audioFilePath, imagePath});
-            ipcMain.emit('sync-file-downloaded', {audioFilePath: audioToDownload.es_favorito ? favoriteAudioFilePath : audioFilePath, imagePath});
+        if (downloadedOrMoved) {
+            logSyncEvent('download', {userId, audioFilePath, imagePath});
+            ipcMain.emit('sync-file-downloaded', {audioFilePath, imagePath});
         }
     } catch (error) {
         console.error('[syncSingleAudio] Error al sincronizar audio individual:', error);
@@ -134,6 +95,13 @@ const syncAudios = async (userId, downloadDir) => {
         });
 
         const audiosToDownload = response.data;
+        const seenCollections = {};
+        audiosToDownload.forEach(audio => {
+            if (!seenCollections[audio.collection]) {
+                seenCollections[audio.collection] = true;
+                console.log('[syncAudios] Colección:', audio.collection);
+            }
+        });
         if (!audiosToDownload || audiosToDownload.length === 0) {
             cleanDownloadDir(downloadDir);
         } else {
@@ -195,16 +163,14 @@ const handleFileDownload = async (audio, downloadDir, userId) => {
         }
 
         if (fs.existsSync(filePath) && !fs.existsSync(favoriteFilePath)) {
-            // Move to favorites
             fs.renameSync(filePath, favoriteFilePath);
             downloadedOrMoved = true;
         } else if (!fs.existsSync(favoriteFilePath)) {
-            // Download directly to favorites
             await downloadFile(audio.download_url, favoriteFilePath);
             downloadedOrMoved = true;
         }
     } else {
-        // If not a favorite, download to collection if it doesn't exist
+
         if (!fs.existsSync(filePath)) {
             await downloadFile(audio.download_url, filePath);
             downloadedOrMoved = true;
@@ -218,6 +184,14 @@ const prepareDownloadDir = (downloadDir, audiosToDownload) => {
     if (!fs.existsSync(downloadDir)) {
         fs.mkdirSync(downloadDir, {recursive: true});
     }
+
+    // Crear carpetas para todas las colecciones
+    const collectionDirs = new Set(audiosToDownload.map(audio => path.join(downloadDir, audio.collection)));
+    collectionDirs.forEach(collectionDir => {
+        if (!fs.existsSync(collectionDir)) {
+            fs.mkdirSync(collectionDir, {recursive: true});
+        }
+    });
 
     const remoteFilePaths = new Set(
         audiosToDownload.map(audio => {
@@ -264,17 +238,13 @@ const handleImageDownload = async (imageUrl, tempDir) => {
         // Solo descargar si el archivo no existe
         if (!fs.existsSync(filePath)) {
             const response = await axios.get(imageUrl, {responseType: 'arraybuffer'});
-            // fs.writeFileSync(filePath, Buffer.from(response.data)); // Esta línea es equivalente a la siguiente
-            fs.writeFileSync(filePath, response.data); // Más conciso y directo, ya que response.data ya es un Buffer
-            return {filePath, downloaded: true}; // Indicar que se descargo
+            fs.writeFileSync(filePath, response.data); 
+            return {filePath, downloaded: true}; 
         }
 
         return {filePath, downloaded: false}; // Indicar que ya existía
     } catch (error) {
         console.error('[handleImageDownload] Error al descargar o manejar la imagen:', error);
-        // En lugar de lanzar el error, podrías retornar un objeto con una propiedad de error
-        // para que la función que llama a handleImageDownload pueda manejar el error sin detener la ejecución.
-        // throw error;
         return { filePath: null, downloaded: false, error: error.message }; // Retorna un objeto con información del error
     }
 };
@@ -303,8 +273,6 @@ const checkForChangesAndSync = async (userId, downloadDir) => {
         console.error('[checkForChangesAndSync] Error al verificar cambios:', error);
     }
 };
-
-
 
 const cleanImageDir = (tempImageDir, remoteImagePaths) => {
     if (!fs.existsSync(tempImageDir)) return;
